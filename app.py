@@ -26,7 +26,7 @@ def process_upload_function(event, context):
     # Get the bytes from S3
     datadir = "/tmp/"
 
-    key_list= key.split("/")
+    key_list = key.split("/")
 
     jurisdiction_acronym = key_list[0]  # e.g az, al, etc
 
