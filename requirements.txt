@@ -1,3 +1,0 @@
-gopenstates==6.11.1
-pip-chill==1.0.1
-zappa==0.55.0
