@@ -87,6 +87,7 @@ def do_import(jurisdiction_id: str, datadir: str) -> dict[str, typing.Any]:
         logger.info("import events...")
         report.update(event_importer.import_directory(datadir))
 
+    with transaction.atomic():
         DatabaseJurisdiction.objects.filter(id=jurisdiction_id).update(
             latest_bill_update=datetime.datetime.utcnow()
         )
