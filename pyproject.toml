@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "openstates-realtime-lambda"
+version = "0.1.0"
+description = "Lmbda function to ingest openstates scraper outputs in realtime"
+authors = ["Sogo Ogundowole <dowolebolu@gmail.com>"]
+readme = "README.md"
+packages = [{include = "openstates_realtime_lambda"}]
+
+[tool.poetry.dependencies]
+python = ">3.9, <3.10"
+openstates = "6.11.1"
+zappa = "0.55.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
