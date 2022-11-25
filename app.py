@@ -9,7 +9,7 @@ from openstates.cli.reports import generate_session_report
 
 
 logger = logging.getLogger("openstates")
-s3_client = boto3.client('s3')
+s3_client = boto3.client("s3")
 
 
 def process_upload_function(event, context):
@@ -18,20 +18,28 @@ def process_upload_function(event, context):
     """
 
     # Get the uploaded file's information
-    bucket = event['Records'][0]['s3']['bucket']['name']  # Will be `my-bucket`
-    key = event['Records'][0]['s3']['object']['key']  # Will be the file path of whatever file was uploaded.
+    bucket = event["Records"][0]["s3"]["bucket"]["name"]  # Will be `my-bucket`
+    key = event["Records"][0]["s3"]["object"][
+        "key"
+    ]  # Will be the file path of whatever file was uploaded.
 
     # Get the bytes from S3
     datadir = "/tmp/"
 
-    state_acronym = key.split("/")[0]  # e.g az, al, etc
+    key_list= key.split("/")
 
-    name_of_file = key.split("/")[-1]  # e.g. bills.json, votes.json, etc
+    jurisdiction_acronym = key_list[0]  # e.g az, al, etc
+
+    name_of_file = key_list[-1]  # e.g. bills.json, votes.json, etc
     filedir = f"{datadir}{name_of_file}"
 
-    s3_client.download_file(bucket, key, filedir)  # Download this file to writable tmp space.
+    s3_client.download_file(
+        bucket, key, filedir
+    )  # Download this file to writable tmp space.
 
-    jurisdiction_id = f"ocd-jurisdiction/country:us/state:{state_acronym}/government"
+    jurisdiction_id = (
+        f"ocd-jurisdiction/country:us/state:{jurisdiction_acronym}/government"
+    )
 
     logger.info(f"importing {jurisdiction_id}...")
     do_import(jurisdiction_id, datadir)
@@ -39,7 +47,8 @@ def process_upload_function(event, context):
     try:
         os.remove(filedir)
     except Exception as e:
-        pass
+
+        logger.warning(f"Failed to remove file :: {e}")
     finally:
         logger.info(">>>> DONE IMPORTING <<<<")
 
@@ -65,10 +74,16 @@ def do_import(jurisdiction_id: str, datadir: str) -> dict[str, typing.Any]:
     with transaction.atomic():
         logger.info("import jurisdictions...")
         report.update(juris_importer.import_directory(datadir))
+
+    with transaction.atomic():
         logger.info("import bills...")
         report.update(bill_importer.import_directory(datadir))
+
+    with transaction.atomic():
         logger.info("import vote events...")
         report.update(vote_event_importer.import_directory(datadir))
+
+    with transaction.atomic():
         logger.info("import events...")
         report.update(event_importer.import_directory(datadir))
 
