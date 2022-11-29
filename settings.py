@@ -3,11 +3,13 @@ import dj_database_url  # type: ignore
 import boto3
 
 # Get db paasword from AWS SSM
-session = boto3.Session(profile_name='civic-eagle')
-ssm = session.client('ssm')
+session = boto3.Session(profile_name="civic-eagle")
+ssm = session.client("ssm")
 
-parameter = ssm.get_parameter(Name=os.environ.get("STAGE_PARAM_NAME"), WithDecryption=True)
-POSTGRES_PASSWORD = parameter['Parameter']['Value']
+parameter = ssm.get_parameter(
+    Name=os.environ.get("STAGE_PARAM_NAME"), WithDecryption=True
+)
+POSTGRES_PASSWORD = parameter["Parameter"]["Value"]
 
 
 # django settings for tests
