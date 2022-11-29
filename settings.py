@@ -3,7 +3,7 @@ import dj_database_url  # type: ignore
 import boto3
 
 # Get db paasword from AWS SSM
-session = boto3.Session(profile_name="civic-eagle")
+session = boto3.Session(profile_name="default")
 ssm = session.client("ssm")
 
 parameter = ssm.get_parameter(
