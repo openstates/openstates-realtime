@@ -1,14 +1,19 @@
 import os
-import dj_database_url  # type: ignore
+
 import boto3
+import dj_database_url  # type: ignore
 
 # Get secret and access key
 AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
+AWS_SESSION_TOKEN = os.environ.get("AWS_SESSION_TOKEN")
+
 
 # Get db paasword from AWS SSM
 session = boto3.Session(
-    aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+    aws_session_token=AWS_SESSION_TOKEN,
 )
 
 ssm = session.client("ssm")
