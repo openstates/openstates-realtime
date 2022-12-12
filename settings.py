@@ -2,10 +2,16 @@ import os
 import dj_database_url  # type: ignore
 import boto3
 
-# Get db paasword from AWS SSM
-session = boto3.Session(profile_name="default")
-ssm = session.client("ssm")
+# Get secret and access key
+AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
 
+# Get db paasword from AWS SSM
+session = boto3.Session(
+    aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY
+)
+
+ssm = session.client("ssm")
 parameter = ssm.get_parameter(
     Name=os.environ.get("STAGE_PARAM_NAME"), WithDecryption=True
 )
