@@ -8,7 +8,7 @@
         "events": [{
             "function": "app.process_upload_function",
             "event_source": {
-                  "arn":  "arn:aws:s3:::openstates-realtime-bills",
+                  "arn":  "arn:aws:s3:::openstates-realtime-bills-dev",
                   "events": [
                     "s3:ObjectCreated:*"
                   ],
