@@ -4,6 +4,7 @@ import logging
 import os
 from django.db import transaction  # type: ignore
 from openstates.cli.reports import generate_session_report
+import urllib.parse
 
 logger = logging.getLogger("openstates")
 s3_client = boto3.client("s3")
@@ -54,6 +55,9 @@ def process_upload_function(event, context):
     key = event["Records"][0]["s3"]["object"][
         "key"
     ]  # Will be the file path of whatever file was uploaded.
+
+    # for some reason, the key is url encoded sometimes
+    key = urllib.parse.unquote(key, encoding="utf-8")
 
     # we want to ignore the event trigger for files that are dumped in archive
     if key.startswith("archive"):
