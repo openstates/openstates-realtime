@@ -1,20 +1,51 @@
+import boto3
 import datetime
 import logging
 import os
-import typing
-
-import boto3
 from django.db import transaction  # type: ignore
 from openstates.cli.reports import generate_session_report
-
 
 logger = logging.getLogger("openstates")
 s3_client = boto3.client("s3")
 
 
+def archive_processed_file(bucket, key):
+    """
+    Archive the processed file to avoid possible scenarios of race conditions.
+    We currently use meta.client.copy instead of client.copy b/c it can copy
+    multiple files via multiple threads, since we have batching in view.
+
+    Args:
+        bucket (str): The s3 bucket name
+        key (str): The key of the file to be archived
+    Returns:
+        None
+
+    Example:
+        >>> archive_processed_file("my-bucket", "my-file.json")
+    """
+
+    global s3_client
+
+    copy_source = {"Bucket": bucket, "Key": key}
+
+    s3_client.meta.client.copy(copy_source, "bucket", f"archive/{key}")
+    logger.info(f"Archived file :: {key}")
+
+    # delete object from original bucket
+    s3_client.delete_object(Bucket=bucket, Key=key)
+    logger.info(f"Deleted file :: {key}")
+
+
 def process_upload_function(event, context):
     """
     Process a file upload.
+
+    Args:
+        event (dict): The event object
+        context (dict): The context object
+    Returns:
+        None
     """
 
     # Get the uploaded file's information
@@ -52,8 +83,21 @@ def process_upload_function(event, context):
     finally:
         logger.info(">>>> DONE IMPORTING <<<<")
 
+    # archive the file
+    archive_processed_file(bucket, key)
 
-def do_import(jurisdiction_id: str, datadir: str) -> dict[str, typing.Any]:
+
+def do_import(jurisdiction_id: str, datadir: str) -> None:
+    """
+    Import data for a jurisdiction into DB
+
+    Args:
+        jurisdiction_id (str): The jurisdiction id
+        datadir (str): The directory where the data is stored temproarily
+    Returns:
+        None
+
+    """
     # import inside here because to avoid loading Django code unnecessarily
     from openstates.importers import (
         JurisdictionImporter,
