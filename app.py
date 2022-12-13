@@ -7,6 +7,7 @@ from openstates.cli.reports import generate_session_report
 
 logger = logging.getLogger("openstates")
 s3_client = boto3.client("s3")
+s3_resource = boto3.resource("s3")
 
 
 def archive_processed_file(bucket, key):
@@ -25,15 +26,15 @@ def archive_processed_file(bucket, key):
         >>> archive_processed_file("my-bucket", "my-file.json")
     """
 
-    s3 = boto3.resource("s3")
+    global s3_resource
 
     copy_source = {"Bucket": bucket, "Key": key}
 
-    s3.meta.client.copy(copy_source, "bucket", f"archive/{key}")
+    s3_resource.meta.client.copy(copy_source, bucket, f"archive/{key}")
     logger.info(f"Archived file :: {key}")
 
     # delete object from original bucket
-    s3.delete_object(Bucket=bucket, Key=key)
+    s3_client.delete_object(Bucket=bucket, Key=key)
     logger.info(f"Deleted file :: {key}")
 
 
@@ -53,6 +54,10 @@ def process_upload_function(event, context):
     key = event["Records"][0]["s3"]["object"][
         "key"
     ]  # Will be the file path of whatever file was uploaded.
+
+    # we want to ignore the event trigger for files that are dumped in archive
+    if key.startswith("archive"):
+        return
 
     # Get the bytes from S3
     datadir = "/tmp/"
