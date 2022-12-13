@@ -25,7 +25,7 @@ def archive_processed_file(bucket, key):
         >>> archive_processed_file("my-bucket", "my-file.json")
     """
 
-    s3 = boto3.resource('s3')
+    s3 = boto3.resource("s3")
 
     copy_source = {"Bucket": bucket, "Key": key}
 
