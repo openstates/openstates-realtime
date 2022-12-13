@@ -29,11 +29,11 @@ def archive_processed_file(bucket, key):
 
     copy_source = {"Bucket": bucket, "Key": key}
 
-    s3_client.meta.client.copy(copy_source, "bucket", f"archive/{key}")
+    s3.meta.client.copy(copy_source, "bucket", f"archive/{key}")
     logger.info(f"Archived file :: {key}")
 
     # delete object from original bucket
-    s3_client.delete_object(Bucket=bucket, Key=key)
+    s3.delete_object(Bucket=bucket, Key=key)
     logger.info(f"Deleted file :: {key}")
 
 
