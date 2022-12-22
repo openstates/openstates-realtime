@@ -5,13 +5,14 @@ import os
 from django.db import transaction  # type: ignore
 from openstates.cli.reports import generate_session_report
 import urllib.parse
+import json
 
 logger = logging.getLogger("openstates")
 s3_client = boto3.client("s3")
 s3_resource = boto3.resource("s3")
 
 
-def archive_processed_file(bucket, key):
+def archive_processed_file(bucket, all_keys):
     """
     Archive the processed file to avoid possible scenarios of race conditions.
     We currently use meta.client.copy instead of client.copy b/c it can copy
@@ -19,7 +20,7 @@ def archive_processed_file(bucket, key):
 
     Args:
         bucket (str): The s3 bucket name
-        key (str): The key of the file to be archived
+        all_keys (list): The key of the file to be archived
     Returns:
         None
 
@@ -28,18 +29,55 @@ def archive_processed_file(bucket, key):
     """
 
     global s3_resource
+    for key in all_keys:
+        copy_source = {"Bucket": bucket, "Key": key}
 
-    copy_source = {"Bucket": bucket, "Key": key}
+        s3_resource.meta.client.copy(copy_source, bucket, f"archive/{key}")
+        logger.info(f"Archived file :: {key}")
 
-    s3_resource.meta.client.copy(copy_source, bucket, f"archive/{key}")
-    logger.info(f"Archived file :: {key}")
-
-    # delete object from original bucket
-    s3_client.delete_object(Bucket=bucket, Key=key)
-    logger.info(f"Deleted file :: {key}")
+        # delete object from original bucket
+        s3_client.delete_object(Bucket=bucket, Key=key)
+        logger.info(f"Deleted file :: {key}")
 
 
-def process_upload_function(event, context):
+def retrieve_messages_from_queue():
+    """
+    Get the file paths from the SQS.
+    """
+
+    # Create SQS client
+    sqs = boto3.client("sqs")
+
+    sqs_url = os.environ.get("SQS_QUEUE_URL")
+
+    # Receive message from SQS queue
+    response = sqs.receive_message(
+        QueueUrl=sqs_url,
+        AttributeNames=["SentTimestamp"],
+        MaxNumberOfMessages=10,
+        MessageAttributeNames=["All"],
+        VisibilityTimeout=0,
+        WaitTimeSeconds=0,
+    )
+
+    messages = response.get("Messages", [])
+    message_bodies = []
+
+    if messages:
+
+        for message in messages:
+            message_bodies.append(message.get("Body"))
+
+            receipt_handle = message["ReceiptHandle"]
+
+            # Delete received message from queue
+            sqs.delete_message(QueueUrl=sqs_url, ReceiptHandle=receipt_handle)
+            logger.info(f"Received and deleted message: {message}")
+
+    return message_bodies
+
+
+def process_import_function(event, context):
     """
     Process a file upload.
 
@@ -50,50 +88,70 @@ def process_upload_function(event, context):
         None
     """
 
+    datadir = "/tmp/"
+    all_files = []
+    all_keys = []
+
+    unique_jurisdictions = set()
+
     # Get the uploaded file's information
-    bucket = event["Records"][0]["s3"]["bucket"]["name"]  # Will be `my-bucket`
-    key = event["Records"][0]["s3"]["object"][
-        "key"
-    ]  # Will be the file path of whatever file was uploaded.
-
-    # for some reason, the key is url encoded sometimes
-    key = urllib.parse.unquote(key, encoding="utf-8")
-
-    # we want to ignore the event trigger for files that are dumped in archive
-    if key.startswith("archive"):
+    messages = retrieve_messages_from_queue()
+    if not messages:
         return
 
-    # Get the bytes from S3
-    datadir = "/tmp/"
+    bucket = messages[0].get("bucket")
 
-    key_list = key.split("/")
+    for message in messages:
+        message = json.loads(message)
+        bucket = message.get("bucket")
+        key = message.get("file_path")
+        all_keys.append(key)
 
-    jurisdiction_acronym = key_list[0]  # e.g az, al, etc
+        # for some reason, the key is url encoded sometimes
+        key = urllib.parse.unquote(key, encoding="utf-8")
 
-    name_of_file = key_list[-1]  # e.g. bills.json, votes.json, etc
-    filedir = f"{datadir}{name_of_file}"
+        # we want to ignore the trigger for files that are dumped in archive
+        if key.startswith("archive"):
+            return
 
-    s3_client.download_file(
-        bucket, key, filedir
-    )  # Download this file to writable tmp space.
+        # Get the bytes from S3
 
-    jurisdiction_id = (
-        f"ocd-jurisdiction/country:us/state:{jurisdiction_acronym}/government"
-    )
+        key_list = key.split("/")
 
-    logger.info(f"importing {jurisdiction_id}...")
-    do_import(jurisdiction_id, datadir)
+        jurisdiction_acronym = key_list[0]  # e.g az, al, etc
 
-    try:
-        os.remove(filedir)
-    except Exception as e:
+        # we want to filter out unique jurisdiction
+        unique_jurisdictions.add(jurisdiction_acronym)
 
-        logger.warning(f"Failed to remove file :: {e}")
-    finally:
-        logger.info(">>>> DONE IMPORTING <<<<")
+        name_of_file = key_list[-1]  # e.g. bills.json, votes.json, etc
+        filedir = f"{datadir}{name_of_file}"
+        all_files.append(filedir)
+        # Download this file to writable tmp space.
+        s3_client.download_file(bucket, key, filedir)
 
-    # archive the file
-    archive_processed_file(bucket, key)
+    # Process imports for all files per jurisdiction in a batch
+    for unique_juris in unique_jurisdictions:
+        jurisdiction_id = f"ocd-jurisdiction/country:us/state:{unique_juris}/government"
+
+        logger.info(f"importing {jurisdiction_id}...")
+        try:
+            do_import(jurisdiction_id, f"{datadir}{unique_juris}")
+        except Exception as e:
+            logger.error(f"Error importing {jurisdiction_id}: {e}")
+            # TODO: Move files to error directory
+            continue
+
+    for file in all_files:
+        try:
+            os.remove(file)
+        except Exception as e:
+
+            logger.warning(f"Failed to remove file :: {e}")
+        finally:
+            logger.info(">>>> DONE IMPORTING <<<<")
+
+    # archive the files
+    archive_processed_file(bucket, all_keys)
 
 
 def do_import(jurisdiction_id: str, datadir: str) -> None:
@@ -114,7 +172,7 @@ def do_import(jurisdiction_id: str, datadir: str) -> None:
         VoteEventImporter,
         EventImporter,
     )
-    from openstates.data.models import Jurisdiction as DatabaseJurisdiction
+    from openstates.data.models import Jurisdiction
 
     # datadir = os.path.join(settings.SCRAPED_DATA_DIR, state)
 
@@ -141,7 +199,7 @@ def do_import(jurisdiction_id: str, datadir: str) -> None:
         report.update(event_importer.import_directory(datadir))
 
     with transaction.atomic():
-        DatabaseJurisdiction.objects.filter(id=jurisdiction_id).update(
+        Jurisdiction.objects.filter(id=jurisdiction_id).update(
             latest_bill_update=datetime.datetime.utcnow()
         )
 
