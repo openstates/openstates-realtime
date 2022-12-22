@@ -27,8 +27,6 @@ def archive_processed_file(bucket, key):
         >>> archive_processed_file("my-bucket", "my-file.json")
     """
 
-    global s3_resource
-
     copy_source = {"Bucket": bucket, "Key": key}
 
     s3_resource.meta.client.copy(copy_source, bucket, f"archive/{key}")

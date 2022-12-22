@@ -28,7 +28,6 @@ def archive_processed_file(bucket, all_keys):
         >>> archive_processed_file("my-bucket", "my-file.json")
     """
 
-    global s3_resource
     for key in all_keys:
         copy_source = {"Bucket": bucket, "Key": key}
 
