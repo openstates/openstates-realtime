@@ -130,12 +130,12 @@ def process_import_function(event, context):
         s3_client.download_file(bucket, key, filedir)
 
     # Process imports for all files per jurisdiction in a batch
-    for unique_juris in unique_jurisdictions:
-        jurisdiction_id = f"ocd-jurisdiction/country:us/state:{unique_juris}/government"
+    for j in unique_jurisdictions:
+        jurisdiction_id = f"ocd-jurisdiction/country:us/state:{j}/government"
 
         logger.info(f"importing {jurisdiction_id}...")
         try:
-            do_import(jurisdiction_id, f"{datadir}{unique_juris}")
+            do_import(jurisdiction_id, f"{datadir}{j}")
         except Exception as e:
             logger.error(f"Error importing {jurisdiction_id}: {e}")
             # TODO: Move files to error directory
