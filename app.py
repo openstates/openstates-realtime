@@ -164,7 +164,6 @@ def process_import_function(event, context):
             logger.info(">>>> DONE IMPORTING <<<<")
 
 
-
 def do_import(jurisdiction_id: str, datadir: str) -> None:
     """
     Import data for a jurisdiction into DB
