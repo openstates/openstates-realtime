@@ -104,6 +104,7 @@ def process_import_function(event, context):
         message = json.loads(message)
         bucket = message.get("bucket")
         key = message.get("file_path")
+        jurisdiction_id = message.get("jurisdiction_id")
         all_keys.append(key)
 
         # for some reason, the key is url encoded sometimes
@@ -130,7 +131,6 @@ def process_import_function(event, context):
 
     # Process imports for all files per jurisdiction in a batch
     for j in unique_jurisdictions:
-        jurisdiction_id = f"ocd-jurisdiction/country:us/state:{j}/government"
 
         logger.info(f"importing {jurisdiction_id}...")
         try:
