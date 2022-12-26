@@ -12,7 +12,7 @@ s3_client = boto3.client("s3")
 s3_resource = boto3.resource("s3")
 
 
-def archive_file(bucket, all_keys, dest="archive"):
+def archive_files(bucket, all_keys, dest="archive"):
     """
     Archive the processed file to avoid possible scenarios of race conditions.
     We currently use meta.client.copy instead of client.copy b/c it can copy
@@ -151,7 +151,8 @@ def process_import_function(event, context):
             logger.error(f"Error importing {juris['id']}: {e}")
             # TODO: Move files to error directory
             continue
-        archive_file(bucket, juris["keys"])
+
+        archive_files(bucket, juris["keys"])
 
     for file in all_files:
         try:
@@ -162,7 +163,6 @@ def process_import_function(event, context):
         finally:
             logger.info(">>>> DONE IMPORTING <<<<")
 
-        # archive the files
 
 
 def do_import(jurisdiction_id: str, datadir: str) -> None:
