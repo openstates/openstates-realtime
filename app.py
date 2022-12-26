@@ -71,6 +71,7 @@ def retrieve_messages_from_queue():
             receipt_handle = message["ReceiptHandle"]
 
             # Delete received message from queue
+            # TODO: Delete message only if the file is successfully processed
             sqs.delete_message(QueueUrl=sqs_url, ReceiptHandle=receipt_handle)
             logger.info(f"Received and deleted message: {message}")
 
