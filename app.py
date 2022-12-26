@@ -91,7 +91,7 @@ def process_import_function(event, context):
     all_files = []
     all_keys = []
 
-    unique_jurisdictions = set()
+    unique_jurisdictions = {}
 
     # Get the uploaded file's information
     messages = retrieve_messages_from_queue()
@@ -105,6 +105,7 @@ def process_import_function(event, context):
         bucket = message.get("bucket")
         key = message.get("file_path")
         jurisdiction_id = message.get("jurisdiction_id")
+
         all_keys.append(key)
 
         # for some reason, the key is url encoded sometimes
@@ -118,10 +119,11 @@ def process_import_function(event, context):
 
         key_list = key.split("/")
 
-        jurisdiction_acronym = key_list[0]  # e.g az, al, etc
+        jurisdiction_abbreviation = key_list[0]  # e.g az, al, etc
 
         # we want to filter out unique jurisdiction
-        unique_jurisdictions.add(jurisdiction_acronym)
+        # e.g {"az": "ocd-jurisdiction/country:us/state:az/government"}
+        unique_jurisdictions[jurisdiction_abbreviation] = jurisdiction_id
 
         name_of_file = key_list[-1]  # e.g. bills.json, votes.json, etc
         filedir = f"{datadir}{name_of_file}"
@@ -130,13 +132,13 @@ def process_import_function(event, context):
         s3_client.download_file(bucket, key, filedir)
 
     # Process imports for all files per jurisdiction in a batch
-    for j in unique_jurisdictions:
+    for abbreviation, juris_id in unique_jurisdictions.items():
 
-        logger.info(f"importing {jurisdiction_id}...")
+        logger.info(f"importing {juris_id}...")
         try:
-            do_import(jurisdiction_id, f"{datadir}{j}")
+            do_import(juris_id, f"{datadir}{abbreviation}")
         except Exception as e:
-            logger.error(f"Error importing {jurisdiction_id}: {e}")
+            logger.error(f"Error importing {juris_id}: {e}")
             # TODO: Move files to error directory
             continue
 
@@ -150,6 +152,7 @@ def process_import_function(event, context):
             logger.info(">>>> DONE IMPORTING <<<<")
 
     # archive the files
+    # TODO: let this action be per juridiction
     archive_processed_file(bucket, all_keys)
 
 
