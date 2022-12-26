@@ -12,7 +12,7 @@ s3_client = boto3.client("s3")
 s3_resource = boto3.resource("s3")
 
 
-def archive_processed_file(bucket, all_keys):
+def archive_file(bucket, all_keys, dest="archive"):
     """
     Archive the processed file to avoid possible scenarios of race conditions.
     We currently use meta.client.copy instead of client.copy b/c it can copy
@@ -21,6 +21,7 @@ def archive_processed_file(bucket, all_keys):
     Args:
         bucket (str): The s3 bucket name
         all_keys (list): The key of the file to be archived
+        dest (str): The destination folder to move the file to
     Returns:
         None
 
@@ -31,7 +32,7 @@ def archive_processed_file(bucket, all_keys):
     for key in all_keys:
         copy_source = {"Bucket": bucket, "Key": key}
 
-        s3_resource.meta.client.copy(copy_source, bucket, f"archive/{key}")
+        s3_resource.meta.client.copy(copy_source, bucket, f"{dest}/{key}")
         logger.info(f"Archived file :: {key}")
 
         # delete object from original bucket
@@ -85,11 +86,19 @@ def process_import_function(event, context):
         context (dict): The context object
     Returns:
         None
+
+    Example for unique_jurisdictions:
+    unique_jurisdictions = {
+        "az": {
+            "id": "ocd-jurisdiction/country:us/state:az/government",
+            "keys": ["az/2021/2021-01-01.json"],
+        }
+    }
+
     """
 
     datadir = "/tmp/"
     all_files = []
-    all_keys = []
 
     unique_jurisdictions = {}
 
@@ -106,8 +115,6 @@ def process_import_function(event, context):
         key = message.get("file_path")
         jurisdiction_id = message.get("jurisdiction_id")
 
-        all_keys.append(key)
-
         # for some reason, the key is url encoded sometimes
         key = urllib.parse.unquote(key, encoding="utf-8")
 
@@ -122,25 +129,28 @@ def process_import_function(event, context):
         jurisdiction_abbreviation = key_list[0]  # e.g az, al, etc
 
         # we want to filter out unique jurisdiction
-        # e.g {"az": "ocd-jurisdiction/country:us/state:az/government"}
-        unique_jurisdictions[jurisdiction_abbreviation] = jurisdiction_id
+
+        unique_jurisdictions[jurisdiction_abbreviation]["id"] = jurisdiction_id
+        unique_jurisdictions[jurisdiction_abbreviation]["keys"].append(key)
 
         name_of_file = key_list[-1]  # e.g. bills.json, votes.json, etc
         filedir = f"{datadir}{name_of_file}"
+
         all_files.append(filedir)
         # Download this file to writable tmp space.
         s3_client.download_file(bucket, key, filedir)
 
     # Process imports for all files per jurisdiction in a batch
-    for abbreviation, juris_id in unique_jurisdictions.items():
+    for abbreviation, juris in unique_jurisdictions.items():
 
-        logger.info(f"importing {juris_id}...")
+        logger.info(f"importing {juris['id']}...")
         try:
-            do_import(juris_id, f"{datadir}{abbreviation}")
+            do_import(juris[id], f"{datadir}{abbreviation}")
         except Exception as e:
-            logger.error(f"Error importing {juris_id}: {e}")
+            logger.error(f"Error importing {juris['id']}: {e}")
             # TODO: Move files to error directory
             continue
+        archive_file(bucket, juris["keys"])
 
     for file in all_files:
         try:
@@ -151,9 +161,7 @@ def process_import_function(event, context):
         finally:
             logger.info(">>>> DONE IMPORTING <<<<")
 
-    # archive the files
-    # TODO: let this action be per juridiction
-    archive_processed_file(bucket, all_keys)
+        # archive the files
 
 
 def do_import(jurisdiction_id: str, datadir: str) -> None:
