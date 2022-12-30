@@ -5,16 +5,14 @@
         "region": "us-east-1",
         "runtime": "python3.9",
         "s3_bucket": "openstates-lambda",
-        "events": [{
-           "function": "app.process_import_function",
-           "expression": "rate(5 minutes)"
-       }],
+        "events": [
+            {"function": "app.process_import_function", "expression": "rate(3 minutes)"}
+        ],
         "manage_roles": false,
         "role_name": "ZappaLambdaRole",
-      "apigateway_enabled": false,
-      "django_settings": "settings",
-      "slim_handler": true
+        "apigateway_enabled": false,
+        "django_settings": "settings",
+        "slim_handler": true,
+        "timeout_seconds": 90,
     }
-
 }
-

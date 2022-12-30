@@ -1,15 +1,29 @@
 import boto3
 import datetime
+import json
 import logging
 import os
+import urllib.parse
 from django.db import transaction  # type: ignore
 from openstates.cli.reports import generate_session_report
-import urllib.parse
-import json
 
 logger = logging.getLogger("openstates")
 s3_client = boto3.client("s3")
 s3_resource = boto3.resource("s3")
+
+
+def remove_duplicate_message(items):
+    """
+    Remove duplicate messages from the list
+    """
+
+    # parse the JSON strings and create a list of dictionaries
+    parsed_items = [json.loads(item) for item in items]
+
+    # Use another list comprehension to create a list of unique dictionaries
+    filtered_items = [dict(i) for i in set(tuple(i.items()) for i in parsed_items)]
+
+    return filtered_items
 
 
 def archive_files(bucket, all_keys, dest="archive"):
@@ -32,7 +46,14 @@ def archive_files(bucket, all_keys, dest="archive"):
     for key in all_keys:
         copy_source = {"Bucket": bucket, "Key": key}
 
-        s3_resource.meta.client.copy(copy_source, bucket, f"{dest}/{key}")
+        logger.info(f"Archiving file {key} to {dest}")
+        logger.info(f"copy_source: {copy_source}")
+
+        try:
+            s3_resource.meta.client.copy(copy_source, bucket, f"{dest}/{key}")
+        except Exception as e:
+            logger.error(f"Error archiving file {key}: {e}")
+            continue
         logger.info(f"Archived file :: {key}")
 
         # delete object from original bucket
@@ -56,8 +77,8 @@ def retrieve_messages_from_queue():
         AttributeNames=["SentTimestamp"],
         MaxNumberOfMessages=10,
         MessageAttributeNames=["All"],
-        VisibilityTimeout=0,
-        WaitTimeSeconds=0,
+        VisibilityTimeout=30,
+        WaitTimeSeconds=1,
     )
 
     messages = response.get("Messages", [])
@@ -71,11 +92,24 @@ def retrieve_messages_from_queue():
             receipt_handle = message["ReceiptHandle"]
 
             # Delete received message from queue
-            # TODO: Delete message only if the file is successfully processed
             sqs.delete_message(QueueUrl=sqs_url, ReceiptHandle=receipt_handle)
             logger.info(f"Received and deleted message: {message}")
-
     return message_bodies
+
+
+def batch_retrieval_from_sqs(batch_size=200):
+    """
+    Retrieve messages from SQS in batches
+    """
+    msg = []
+
+    # SQS allows a maximum of 10 messages to be retrieved at a time
+    for _ in range(batch_size // 10):
+        msg.extend(retrieve_messages_from_queue())
+    filtered_messages = remove_duplicate_message(msg)
+
+    logger.info(f"message_bodies: {filtered_messages}")
+    return filtered_messages
 
 
 def process_import_function(event, context):
@@ -99,19 +133,20 @@ def process_import_function(event, context):
     """
 
     datadir = "/tmp/"
-    all_files = []
+
+    # making this a set to avoid duplicate files in queue
+    all_files = set()
 
     unique_jurisdictions = {}
 
     # Get the uploaded file's information
-    messages = retrieve_messages_from_queue()
+    messages = batch_retrieval_from_sqs()
     if not messages:
         return
 
     bucket = messages[0].get("bucket")
 
     for message in messages:
-        message = json.loads(message)
         bucket = message.get("bucket")
         key = message.get("file_path")
         jurisdiction_id = message.get("jurisdiction_id")
@@ -131,25 +166,39 @@ def process_import_function(event, context):
 
         # we want to filter out unique jurisdiction
 
-        unique_jurisdictions[jurisdiction_abbreviation]["id"] = jurisdiction_id
+        if jurisdiction_abbreviation not in unique_jurisdictions:
+            unique_jurisdictions[jurisdiction_abbreviation] = {
+                "id": jurisdiction_id,
+                "keys": [],
+            }
         unique_jurisdictions[jurisdiction_abbreviation]["keys"].append(key)
 
-        name_of_file = key_list[-1]  # e.g. bills.json, votes.json, etc
-        filedir = f"{datadir}{name_of_file}"
+        # name_of_file = key_list[-1]  # e.g. bills.json, votes.json, etc
 
-        all_files.append(filedir)
+        filedir = f"{datadir}{key}"
+
+        # Check if the directory for jurisdiction exists
+        dir_path = os.path.join(datadir, jurisdiction_abbreviation)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+
+        all_files.add(filedir)
         # Download this file to writable tmp space.
-        s3_client.download_file(bucket, key, filedir)
+        try:
+            s3_client.download_file(bucket, key, filedir)
+        except Exception as e:
+            logger.error(f"Error downloading file: {e}")
+            all_files.remove(filedir)
+            continue
 
     # Process imports for all files per jurisdiction in a batch
     for abbreviation, juris in unique_jurisdictions.items():
 
         logger.info(f"importing {juris['id']}...")
         try:
-            do_import(juris[id], f"{datadir}{abbreviation}")
+            do_import(juris["id"], f"{datadir}{abbreviation}")
         except Exception as e:
             logger.error(f"Error importing {juris['id']}: {e}")
-            # TODO: Move files to error directory
             continue
 
         archive_files(bucket, juris["keys"])
