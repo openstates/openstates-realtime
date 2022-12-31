@@ -1,3 +1,4 @@
+# noqa: E501
 import boto3
 import datetime
 import json
@@ -21,9 +22,8 @@ def remove_duplicate_message(items):
     parsed_items = [json.loads(item) for item in items]
 
     # Use another list comprehension to create a list of unique dictionaries
-    filtered_items = [
-        dict(i) for i in set(tuple(i.items()) for i in parsed_items)
-    ]
+
+    filtered_items = [dict(i) for i in set(tuple(i.items()) for i in parsed_items)]
 
     return filtered_items
 
