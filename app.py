@@ -22,7 +22,7 @@ def remove_duplicate_message(items):
 
     # Use another list comprehension to create a list of unique dictionaries
     filtered_items = [
-        dict(i) for i in set(tuple(i.items()) for i in parsed_items)  # flake8: noqa
+        dict(i) for i in set(tuple(i.items()) for i in parsed_items)
     ]
 
     return filtered_items
