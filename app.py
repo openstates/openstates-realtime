@@ -51,7 +51,11 @@ def archive_files(bucket, all_keys, dest="archive"):
         logger.info(f"Archiving file {key} to {dest}")
 
         try:
-            s3_resource.meta.client.copy(copy_source, bucket, f"{dest}/{datetime.datetime.utcnow().date()}/{key}")
+            s3_resource.meta.client.copy(
+                copy_source,
+                bucket,
+                f"{dest}/{datetime.datetime.utcnow().date()}/{key}"
+            )
         except Exception as e:
             logger.error(f"Error archiving file {key}: {e}")
             continue
@@ -204,7 +208,6 @@ def process_import_function(event, context):
         archive_files(bucket, juris["keys"])
 
     logger.info(f"{len(all_files)} files processed")
-
 
 
 def do_import(jurisdiction_id: str, datadir: str) -> None:
