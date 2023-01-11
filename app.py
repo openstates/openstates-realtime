@@ -52,7 +52,9 @@ def archive_files(bucket, all_keys, dest="archive"):
 
         try:
             s3_resource.meta.client.copy(
-                copy_source, bucket, f"{dest}/{datetime.datetime.utcnow().date()}/{key}"  # noqa: E501
+                copy_source,
+                bucket,
+                f"{dest}/{datetime.datetime.utcnow().date()}/{key}",  # noqa: E501
             )
         except Exception as e:
             logger.error(f"Error archiving file {key}: {e}")
