@@ -1,57 +1,34 @@
 {
     "dev": {
         "profile_name": "default",
-        "project_name": "os-realtime",
+        "project_name": "os-realtime-batching",
         "region": "us-east-1",
         "runtime": "python3.9",
         "s3_bucket": "openstates-lambda",
-        "events": [{
-            "function": "app.process_upload_function",
-            "event_source": {
-                  "arn":  "arn:aws:s3:::openstates-realtime-bills-dev",
-                  "events": [
-                    "s3:ObjectCreated:*"
-                  ],
-                  "key_filters": [
-                      {
-                    "type": "suffix",
-                    "value": ".json"
-                  }
-                  ]
-               }
-            }],
+        "events": [
+            {"function": "app.process_import_function", "expression": "rate(3 minutes)"}
+        ],
         "manage_roles": false,
         "role_name": "ZappaLambdaRole",
-      "apigateway_enabled": false,
-      "django_settings": "settings",
-      "slim_handler": true
+        "apigateway_enabled": false,
+        "django_settings": "settings",
+        "slim_handler": true,
+        "timeout_seconds": 90
     },
-    "prod": {
-      "profile_name": "default",
-      "project_name": "os-realtime-bills",
-      "region": "us-east-1",
-      "runtime": "python3.9",
-      "s3_bucket": "openstates-lambda",
-      "events": [{
-          "function": "app.process_upload_function",
-          "event_source": {
-                "arn":  "arn:aws:s3:::openstates-realtime-bills",
-                "events": [
-                  "s3:ObjectCreated:*"
-                ],
-                "key_filters": [
-                    {
-                  "type": "suffix",
-                  "value": ".json"
-                }
-                ]
-             }
-          }],
-      "manage_roles": false,
-      "role_name": "ZappaLambdaRole",
-    "apigateway_enabled": false,
-    "django_settings": "settings",
-    "timeout_seconds": 120,
-    "slim_handler": true
-  }
+       "prod": {
+        "profile_name": "default",
+        "project_name": "os-realtime-batching",
+        "region": "us-east-1",
+        "runtime": "python3.9",
+        "s3_bucket": "openstates-lambda",
+        "events": [
+            {"function": "app.process_import_function", "expression": "rate(3 minutes)"}
+        ],
+        "manage_roles": false,
+        "role_name": "ZappaLambdaRole",
+        "apigateway_enabled": false,
+        "django_settings": "settings",
+        "slim_handler": true,
+        "timeout_seconds": 90
+    }
 }

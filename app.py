@@ -1,17 +1,34 @@
 import boto3
 import datetime
+import json
 import logging
 import os
+import urllib.parse
 from django.db import transaction  # type: ignore
 from openstates.cli.reports import generate_session_report
-import urllib.parse
 
 logger = logging.getLogger("openstates")
 s3_client = boto3.client("s3")
 s3_resource = boto3.resource("s3")
 
 
-def archive_processed_file(bucket, key):
+def remove_duplicate_message(items):
+    """
+    Remove duplicate messages from the list
+    """
+
+    # parse the JSON strings and create a list of dictionaries
+    parsed_items = [json.loads(item) for item in items]
+
+    # Use another list comprehension to create a list of unique dictionaries
+    filtered_items = [
+        dict(i) for i in set(tuple(i.items()) for i in parsed_items)  # noqa: E501
+    ]
+
+    return filtered_items
+
+
+def archive_files(bucket, all_keys, dest="archive"):
     """
     Archive the processed file to avoid possible scenarios of race conditions.
     We currently use meta.client.copy instead of client.copy b/c it can copy
@@ -19,7 +36,8 @@ def archive_processed_file(bucket, key):
 
     Args:
         bucket (str): The s3 bucket name
-        key (str): The key of the file to be archived
+        all_keys (list): The key of the file to be archived
+        dest (str): The destination folder to move the file to
     Returns:
         None
 
@@ -27,19 +45,78 @@ def archive_processed_file(bucket, key):
         >>> archive_processed_file("my-bucket", "my-file.json")
     """
 
-    global s3_resource
+    for key in all_keys:
+        copy_source = {"Bucket": bucket, "Key": key}
 
-    copy_source = {"Bucket": bucket, "Key": key}
+        logger.info(f"Archiving file {key} to {dest}")
 
-    s3_resource.meta.client.copy(copy_source, bucket, f"archive/{key}")
-    logger.info(f"Archived file :: {key}")
+        try:
+            s3_resource.meta.client.copy(
+                copy_source,
+                bucket,
+                f"{dest}/{datetime.datetime.utcnow().date()}/{key}",  # noqa: E501
+            )
+        except Exception as e:
+            logger.error(f"Error archiving file {key}: {e}")
+            continue
 
-    # delete object from original bucket
-    s3_client.delete_object(Bucket=bucket, Key=key)
-    logger.info(f"Deleted file :: {key}")
+        # delete object from original bucket
+        s3_client.delete_object(Bucket=bucket, Key=key)
+        logger.info(f"Deleted file :: {key}")
 
 
-def process_upload_function(event, context):
+def retrieve_messages_from_queue():
+    """
+    Get the file paths from the SQS.
+    """
+
+    # Create SQS client
+    sqs = boto3.client("sqs")
+
+    sqs_url = os.environ.get("SQS_QUEUE_URL")
+
+    # Receive message from SQS queue
+    response = sqs.receive_message(
+        QueueUrl=sqs_url,
+        AttributeNames=["SentTimestamp"],
+        MaxNumberOfMessages=10,
+        MessageAttributeNames=["All"],
+        VisibilityTimeout=30,
+        WaitTimeSeconds=1,
+    )
+
+    messages = response.get("Messages", [])
+    message_bodies = []
+
+    if messages:
+
+        for message in messages:
+            message_bodies.append(message.get("Body"))
+
+            receipt_handle = message["ReceiptHandle"]
+
+            # Delete received message from queue
+            sqs.delete_message(QueueUrl=sqs_url, ReceiptHandle=receipt_handle)
+            logger.info(f"Received and deleted message: {receipt_handle}")
+    return message_bodies
+
+
+def batch_retrieval_from_sqs(batch_size=200):
+    """
+    Retrieve messages from SQS in batches
+    """
+    msg = []
+
+    # SQS allows a maximum of 10 messages to be retrieved at a time
+    for _ in range(batch_size // 10):
+        msg.extend(retrieve_messages_from_queue())
+    filtered_messages = remove_duplicate_message(msg)
+
+    logger.info(f"message_count: {len(filtered_messages)}")
+    return filtered_messages
+
+
+def process_import_function(event, context):
     """
     Process a file upload.
 
@@ -48,52 +125,89 @@ def process_upload_function(event, context):
         context (dict): The context object
     Returns:
         None
+
+    Example for unique_jurisdictions:
+    unique_jurisdictions = {
+        "az": {
+            "id": "ocd-jurisdiction/country:us/state:az/government",
+            "keys": ["az/2021/2021-01-01.json"],
+        }
+    }
+
     """
 
-    # Get the uploaded file's information
-    bucket = event["Records"][0]["s3"]["bucket"]["name"]  # Will be `my-bucket`
-    key = event["Records"][0]["s3"]["object"][
-        "key"
-    ]  # Will be the file path of whatever file was uploaded.
-
-    # for some reason, the key is url encoded sometimes
-    key = urllib.parse.unquote(key, encoding="utf-8")
-
-    # we want to ignore the event trigger for files that are dumped in archive
-    if key.startswith("archive"):
-        return
-
-    # Get the bytes from S3
     datadir = "/tmp/"
 
-    key_list = key.split("/")
+    # making this a set to avoid duplicate files in queue
+    all_files = set()
 
-    jurisdiction_acronym = key_list[0]  # e.g az, al, etc
+    unique_jurisdictions = {}
 
-    name_of_file = key_list[-1]  # e.g. bills.json, votes.json, etc
-    filedir = f"{datadir}{name_of_file}"
+    # Get the uploaded file's information
+    messages = batch_retrieval_from_sqs()
+    if not messages:
+        return
 
-    s3_client.download_file(
-        bucket, key, filedir
-    )  # Download this file to writable tmp space.
+    bucket = messages[0].get("bucket")
 
-    jurisdiction_id = (
-        f"ocd-jurisdiction/country:us/state:{jurisdiction_acronym}/government"
-    )
+    for message in messages:
+        bucket = message.get("bucket")
+        key = message.get("file_path")
+        jurisdiction_id = message.get("jurisdiction_id")
 
-    logger.info(f"importing {jurisdiction_id}...")
-    do_import(jurisdiction_id, datadir)
+        # for some reason, the key is url encoded sometimes
+        key = urllib.parse.unquote(key, encoding="utf-8")
 
-    try:
-        os.remove(filedir)
-    except Exception as e:
+        # we want to ignore the trigger for files that are dumped in archive
+        if key.startswith("archive"):
+            return
 
-        logger.warning(f"Failed to remove file :: {e}")
-    finally:
-        logger.info(">>>> DONE IMPORTING <<<<")
+        # Get the bytes from S3
 
-    # archive the file
-    archive_processed_file(bucket, key)
+        key_list = key.split("/")
+
+        jurisdiction_abbreviation = key_list[0]  # e.g az, al, etc
+
+        # we want to filter out unique jurisdiction
+
+        if jurisdiction_abbreviation not in unique_jurisdictions:
+            unique_jurisdictions[jurisdiction_abbreviation] = {
+                "id": jurisdiction_id,
+                "keys": [],
+            }
+        unique_jurisdictions[jurisdiction_abbreviation]["keys"].append(key)
+
+        # name_of_file = key_list[-1]  # e.g. bills.json, votes.json, etc
+
+        filedir = f"{datadir}{key}"
+
+        # Check if the directory for jurisdiction exists
+        dir_path = os.path.join(datadir, jurisdiction_abbreviation)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+
+        all_files.add(filedir)
+        # Download this file to writable tmp space.
+        try:
+            s3_client.download_file(bucket, key, filedir)
+        except Exception as e:
+            logger.error(f"Error downloading file: {e}")
+            all_files.remove(filedir)
+            continue
+
+    # Process imports for all files per jurisdiction in a batch
+    for abbreviation, juris in unique_jurisdictions.items():
+
+        logger.info(f"importing {juris['id']}...")
+        try:
+            do_import(juris["id"], f"{datadir}{abbreviation}")
+        except Exception as e:
+            logger.error(f"Error importing {juris['id']}: {e}")
+            continue
+
+        archive_files(bucket, juris["keys"])
+
+    logger.info(f"{len(all_files)} files processed")
 
 
 def do_import(jurisdiction_id: str, datadir: str) -> None:
@@ -114,7 +228,7 @@ def do_import(jurisdiction_id: str, datadir: str) -> None:
         VoteEventImporter,
         EventImporter,
     )
-    from openstates.data.models import Jurisdiction as DatabaseJurisdiction
+    from openstates.data.models import Jurisdiction
 
     # datadir = os.path.join(settings.SCRAPED_DATA_DIR, state)
 
@@ -141,7 +255,7 @@ def do_import(jurisdiction_id: str, datadir: str) -> None:
         report.update(event_importer.import_directory(datadir))
 
     with transaction.atomic():
-        DatabaseJurisdiction.objects.filter(id=jurisdiction_id).update(
+        Jurisdiction.objects.filter(id=jurisdiction_id).update(
             latest_bill_update=datetime.datetime.utcnow()
         )
 
