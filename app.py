@@ -49,14 +49,12 @@ def archive_files(bucket, all_keys, dest="archive"):
         copy_source = {"Bucket": bucket, "Key": key}
 
         logger.info(f"Archiving file {key} to {dest}")
-        logger.info(f"copy_source: {copy_source}")
 
         try:
-            s3_resource.meta.client.copy(copy_source, bucket, f"{dest}/{key}")
+            s3_resource.meta.client.copy(copy_source, bucket, f"{dest}/{datetime.datetime.utcnow().date()}/{key}")
         except Exception as e:
             logger.error(f"Error archiving file {key}: {e}")
             continue
-        logger.info(f"Archived file :: {key}")
 
         # delete object from original bucket
         s3_client.delete_object(Bucket=bucket, Key=key)
@@ -95,7 +93,7 @@ def retrieve_messages_from_queue():
 
             # Delete received message from queue
             sqs.delete_message(QueueUrl=sqs_url, ReceiptHandle=receipt_handle)
-            logger.info(f"Received and deleted message: {message}")
+            logger.info(f"Received and deleted message: {receipt_handle}")
     return message_bodies
 
 
@@ -110,7 +108,7 @@ def batch_retrieval_from_sqs(batch_size=200):
         msg.extend(retrieve_messages_from_queue())
     filtered_messages = remove_duplicate_message(msg)
 
-    logger.info(f"message_bodies: {filtered_messages}")
+    logger.info(f"message_count: {len(filtered_messages)}")
     return filtered_messages
 
 
@@ -205,14 +203,8 @@ def process_import_function(event, context):
 
         archive_files(bucket, juris["keys"])
 
-    for file in all_files:
-        try:
-            os.remove(file)
-        except Exception as e:
+    logger.info(f"{len(all_files)} files processed")
 
-            logger.warning(f"Failed to remove file :: {e}")
-        finally:
-            logger.info(">>>> DONE IMPORTING <<<<")
 
 
 def do_import(jurisdiction_id: str, datadir: str) -> None:
