@@ -32,7 +32,7 @@ aws s3api put-lifecycle-configuration --bucket openstates-realtime-bills --lifec
     {
       "Status": "Enabled",
       "Filter": {
-        "Prefix": ""
+        "Prefix": "archive/"
       },
       "Expiration": {
         "Days": 2
