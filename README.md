@@ -24,7 +24,7 @@ poetry run zappa update [stage]
 Where [stage] is the stage to deploy to. This can be either dev or prod.
 
 ## S3 Bucket Lifecyle
-The S3 bucket that the lambda function is triggered by should have a lifecycle policy that deletes the files after 2 
+The S3 bucket that the lambda function is uses should have a lifecycle policy that deletes the files after 2 
 days. The CLI command for this is below:
 ```bash
 aws s3api put-lifecycle-configuration --bucket openstates-realtime-bills --lifecycle-configuration '{
