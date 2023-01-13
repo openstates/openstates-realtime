@@ -1,3 +1,4 @@
+# set object lifecycle for openstates-realtime-bills s3 bucket: deletion after 2 days
 aws s3api put-lifecycle-configuration --bucket openstates-realtime-bills --lifecycle-configuration '{
   "Rules": [
     {
