@@ -22,7 +22,7 @@
         "runtime": "python3.9",
         "s3_bucket": "openstates-lambda",
         "events": [
-            {"function": "app.process_import_function", "expression": "rate(3 minutes)"}
+            {"function": "app.process_import_function", "expression": "rate(2 minutes)"}
         ],
         "manage_roles": false,
         "role_name": "ZappaLambdaRole",
@@ -30,5 +30,6 @@
         "django_settings": "settings",
         "slim_handler": true,
         "timeout_seconds": 90
+         
     }
 }
