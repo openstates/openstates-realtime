@@ -1,5 +1,7 @@
 import boto3
 import datetime
+import signal
+
 import json
 import logging
 import os
@@ -10,6 +12,102 @@ from openstates.cli.reports import generate_session_report
 logger = logging.getLogger("openstates")
 s3_client = boto3.client("s3")
 s3_resource = boto3.resource("s3")
+
+
+def process_import_function(event, context):
+    """
+    Process a file upload.
+
+    Args:
+        event (dict): The event object
+        context (dict): The context object
+    Returns:
+        None
+
+    Example for unique_jurisdictions:
+    unique_jurisdictions = {
+        "az": {
+            "id": "ocd-jurisdiction/country:us/state:az/government",
+            "keys": ["az/2021/2021-01-01.json"],
+        }
+    }
+
+    """
+
+    datadir = "/tmp/"
+
+    # making this a set to avoid duplicate files in queue
+    all_files = set()
+
+    unique_jurisdictions = {}
+
+    # Get the uploaded file's information
+    messages = batch_retrieval_from_sqs()
+    if not messages:
+        return
+
+    bucket = messages[0].get("bucket")
+
+    for message in messages:
+        bucket = message.get("bucket")
+        key = message.get("file_path")
+        jurisdiction_id = message.get("jurisdiction_id")
+
+        # for some reason, the key is url encoded sometimes
+        key = urllib.parse.unquote(key, encoding="utf-8")
+
+        # we want to ignore the trigger for files that are dumped in archive
+        if key.startswith("archive"):
+            return
+
+        # Get the bytes from S3
+
+        key_list = key.split("/")
+
+        jurisdiction_abbreviation = key_list[0]  # e.g az, al, etc
+
+        # we want to filter out unique jurisdiction
+
+        if jurisdiction_abbreviation not in unique_jurisdictions:
+            unique_jurisdictions[jurisdiction_abbreviation] = {
+                "id": jurisdiction_id,
+                "keys": [],
+            }
+        unique_jurisdictions[jurisdiction_abbreviation]["keys"].append(key)
+
+        # name_of_file = key_list[-1]  # e.g. bills.json, votes.json, etc
+
+        filedir = f"{datadir}{key}"
+
+        # Check if the directory for jurisdiction exists
+        dir_path = os.path.join(datadir, jurisdiction_abbreviation)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+
+        all_files.add(filedir)
+        # Download this file to writable tmp space.
+        try:
+            s3_client.download_file(bucket, key, filedir)
+        except Exception as e:
+            logger.error(f"Error downloading file: {e}")
+            all_files.remove(filedir)
+            continue
+
+    # Process imports for all files per jurisdiction in a batch
+    for abbreviation, juris in unique_jurisdictions.items():
+
+        logger.info(f"importing {juris['id']}...")
+
+        try:
+            do_import(juris["id"], f"{datadir}{abbreviation}")
+        except Exception as e:
+            logger.error(
+                f"Error importing jurisdiction {juris['id']}: {e}"
+            )  # noqa: E501
+            continue
+        archive_files(bucket, juris["keys"])
+
+    logger.info(f"{len(all_files)} files processed")
 
 
 def remove_duplicate_message(items):
@@ -101,7 +199,7 @@ def retrieve_messages_from_queue():
     return message_bodies
 
 
-def batch_retrieval_from_sqs(batch_size=200):
+def batch_retrieval_from_sqs(batch_size=300):
     """
     Retrieve messages from SQS in batches
     """
@@ -116,98 +214,39 @@ def batch_retrieval_from_sqs(batch_size=200):
     return filtered_messages
 
 
-def process_import_function(event, context):
+def do_atomic(func, datadir, type_):
     """
-    Process a file upload.
+    Run a function in an atomic transaction.
 
     Args:
-        event (dict): The event object
-        context (dict): The context object
+        func (function): The function to run
+        datadir (str): The directory to run the function on
+        type_ (str): The type of import
     Returns:
-        None
+        The return value of the function
 
-    Example for unique_jurisdictions:
-    unique_jurisdictions = {
-        "az": {
-            "id": "ocd-jurisdiction/country:us/state:az/government",
-            "keys": ["az/2021/2021-01-01.json"],
-        }
-    }
+    Note: This some imports usually timeout when there are no results for
+     persons or there are more than one result for a unique person. This error
+     is meant to be properly handled in the os-core project in the future.
 
     """
-
-    datadir = "/tmp/"
-
-    # making this a set to avoid duplicate files in queue
-    all_files = set()
-
-    unique_jurisdictions = {}
-
-    # Get the uploaded file's information
-    messages = batch_retrieval_from_sqs()
-    if not messages:
-        return
-
-    bucket = messages[0].get("bucket")
-
-    for message in messages:
-        bucket = message.get("bucket")
-        key = message.get("file_path")
-        jurisdiction_id = message.get("jurisdiction_id")
-
-        # for some reason, the key is url encoded sometimes
-        key = urllib.parse.unquote(key, encoding="utf-8")
-
-        # we want to ignore the trigger for files that are dumped in archive
-        if key.startswith("archive"):
-            return
-
-        # Get the bytes from S3
-
-        key_list = key.split("/")
-
-        jurisdiction_abbreviation = key_list[0]  # e.g az, al, etc
-
-        # we want to filter out unique jurisdiction
-
-        if jurisdiction_abbreviation not in unique_jurisdictions:
-            unique_jurisdictions[jurisdiction_abbreviation] = {
-                "id": jurisdiction_id,
-                "keys": [],
-            }
-        unique_jurisdictions[jurisdiction_abbreviation]["keys"].append(key)
-
-        # name_of_file = key_list[-1]  # e.g. bills.json, votes.json, etc
-
-        filedir = f"{datadir}{key}"
-
-        # Check if the directory for jurisdiction exists
-        dir_path = os.path.join(datadir, jurisdiction_abbreviation)
-        if not os.path.exists(dir_path):
-            os.makedirs(dir_path)
-
-        all_files.add(filedir)
-        # Download this file to writable tmp space.
+    with transaction.atomic():
+        logger.info(f"Running {type_}...")
         try:
-            s3_client.download_file(bucket, key, filedir)
-        except Exception as e:
-            logger.error(f"Error downloading file: {e}")
-            all_files.remove(filedir)
-            continue
 
-    # Process imports for all files per jurisdiction in a batch
-    for abbreviation, juris in unique_jurisdictions.items():
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(60)
+            return func(datadir)
+        except TimeoutError:
+            logger.error(f"Timeout running {type_}")
+            # noqa: E501
+        finally:
+            # deactivate the alarm
+            signal.alarm(0)
 
-        logger.info(f"importing {juris['id']}...")
-        try:
-            do_import(juris["id"], f"{datadir}{abbreviation}")
-        except Exception as e:
-            logger.error(f"Error importing {juris['id']}: {e}")
-            continue
 
-        archive_files(bucket, juris["keys"])
-
-    logger.info(f"{len(all_files)} files processed")
+def timeout_handler(signum, frame):
+    raise TimeoutError("Timeout occurred while running the do_atomic function")
 
 
 def do_import(jurisdiction_id: str, datadir: str) -> None:
@@ -236,28 +275,15 @@ def do_import(jurisdiction_id: str, datadir: str) -> None:
     bill_importer = BillImporter(jurisdiction_id)
     vote_event_importer = VoteEventImporter(jurisdiction_id, bill_importer)
     event_importer = EventImporter(jurisdiction_id, vote_event_importer)
-    report = {}
     logger.info(f"Datadir: {datadir}")
-    with transaction.atomic():
-        logger.info("import jurisdictions...")
-        report.update(juris_importer.import_directory(datadir))
 
-    with transaction.atomic():
-        logger.info("import bills...")
-        report.update(bill_importer.import_directory(datadir))
-
-    with transaction.atomic():
-        logger.info("import vote events...")
-        report.update(vote_event_importer.import_directory(datadir))
-
-    with transaction.atomic():
-        logger.info("import events...")
-        report.update(event_importer.import_directory(datadir))
-
-    with transaction.atomic():
-        Jurisdiction.objects.filter(id=jurisdiction_id).update(
-            latest_bill_update=datetime.datetime.utcnow()
-        )
+    do_atomic(juris_importer.import_directory, datadir, "jurisdictions")
+    do_atomic(bill_importer.import_directory, datadir, "bill")  # noqa: E501
+    do_atomic(vote_event_importer.import_directory, datadir, "vote_event")
+    do_atomic(event_importer.import_directory, datadir, "event")  # noqa: E501
+    Jurisdiction.objects.filter(id=jurisdiction_id).update(
+        latest_bill_update=datetime.datetime.utcnow()
+    )
 
     # compile info on all sessions that were updated in this run
     seen_sessions = set()
