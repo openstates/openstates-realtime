@@ -1,17 +1,19 @@
 import boto3
 import datetime
-import signal
-
 import json
 import logging
 import os
+import signal
 import urllib.parse
 from django.db import transaction  # type: ignore
 from openstates.cli.reports import generate_session_report
+from openstates.utils.instrument import Instrumentation
 
 logger = logging.getLogger("openstates")
 s3_client = boto3.client("s3")
 s3_resource = boto3.resource("s3")
+
+stats = Instrumentation()
 
 
 def process_import_function(event, context):
@@ -52,6 +54,7 @@ def process_import_function(event, context):
         bucket = message.get("bucket")
         key = message.get("file_path")
         jurisdiction_id = message.get("jurisdiction_id")
+        jurisdiction_name = message.get("jurisdiction_name")
 
         # for some reason, the key is url encoded sometimes
         key = urllib.parse.unquote(key, encoding="utf-8")
@@ -71,6 +74,7 @@ def process_import_function(event, context):
         if jurisdiction_abbreviation not in unique_jurisdictions:
             unique_jurisdictions[jurisdiction_abbreviation] = {
                 "id": jurisdiction_id,
+                "name": jurisdiction_name,
                 "keys": [],
             }
         unique_jurisdictions[jurisdiction_abbreviation]["keys"].append(key)
@@ -100,6 +104,14 @@ def process_import_function(event, context):
 
         try:
             do_import(juris["id"], f"{datadir}{abbreviation}")
+            stats.send_last_run(
+                "last_collection_run_time",
+                {
+                    "jurisdiction": juris["name"],
+                    "scrape_type": "import",
+                },
+            )
+
         except Exception as e:
             logger.error(
                 f"Error importing jurisdiction {juris['id']}: {e}"
