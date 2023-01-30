@@ -120,6 +120,7 @@ def process_import_function(event, context):
         archive_files(bucket, juris["keys"])
 
     logger.info(f"{len(all_files)} files processed")
+    stats.close()
 
 
 def remove_duplicate_message(items):
