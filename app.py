@@ -99,7 +99,6 @@ def process_import_function(event, context):
 
     # Process imports for all files per jurisdiction in a batch
     for abbreviation, juris in unique_jurisdictions.items():
-
         logger.info(f"importing {juris['id']}...")
 
         try:
@@ -200,7 +199,6 @@ def retrieve_messages_from_queue():
     message_bodies = []
 
     if messages:
-
         for message in messages:
             message_bodies.append(message.get("Body"))
 
@@ -246,7 +244,6 @@ def do_atomic(func, datadir, type_):
     with transaction.atomic():
         logger.info(f"Running {type_}...")
         try:
-
             signal.signal(signal.SIGALRM, timeout_handler)
             signal.alarm(120)
             return func(datadir)
