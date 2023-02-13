@@ -212,7 +212,7 @@ def retrieve_messages_from_queue():
     return message_bodies
 
 
-def batch_retrieval_from_sqs(batch_size=300):
+def batch_retrieval_from_sqs(batch_size=400):
     """
     Retrieve messages from SQS in batches
     """
@@ -248,7 +248,7 @@ def do_atomic(func, datadir, type_):
         try:
 
             signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(60)
+            signal.alarm(120)
             return func(datadir)
         except TimeoutError:
             logger.error(f"Timeout running {type_}")

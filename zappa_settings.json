@@ -5,14 +5,14 @@
         "runtime": "python3.9",
         "s3_bucket": "openstates-lambda",
         "events": [
-            {"function": "app.process_import_function", "expression": "rate(3 minutes)"}
+            {"function": "app.process_import_function", "expression": "rate(2 minutes)"}
         ],
         "manage_roles": false,
         "role_name": "ZappaLambdaRole",
         "apigateway_enabled": false,
         "django_settings": "settings",
         "slim_handler": true,
-        "timeout_seconds": 90,
+        "timeout_seconds": 700,
         "lambda_concurrency": 0
     },
     "prod": {
@@ -28,7 +28,7 @@
         "apigateway_enabled": false,
         "django_settings": "settings",
         "slim_handler": true,
-        "timeout_seconds": 250,
+        "timeout_seconds": 700,
         "lambda_concurrency": 10,
         "memory_size": 512
     }
