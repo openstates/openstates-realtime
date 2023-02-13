@@ -148,7 +148,7 @@ def archive_files(bucket, all_keys, dest="archive"):
     Args:
         bucket (str): The s3 bucket name
         all_keys (list): The key of the file to be archived
-        dest (str): The destination folder to move the file to
+        dest (str): The destination folder to move the file to.
     Returns:
         None
 
