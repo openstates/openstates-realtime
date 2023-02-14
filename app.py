@@ -1,17 +1,19 @@
 import boto3
 import datetime
-import signal
-
 import json
 import logging
 import os
+import signal
 import urllib.parse
 from django.db import transaction  # type: ignore
 from openstates.cli.reports import generate_session_report
+from openstates.utils.instrument import Instrumentation
 
 logger = logging.getLogger("openstates")
 s3_client = boto3.client("s3")
 s3_resource = boto3.resource("s3")
+
+stats = Instrumentation()
 
 
 def process_import_function(event, context):
@@ -52,6 +54,7 @@ def process_import_function(event, context):
         bucket = message.get("bucket")
         key = message.get("file_path")
         jurisdiction_id = message.get("jurisdiction_id")
+        jurisdiction_name = message.get("jurisdiction_name")
 
         # for some reason, the key is url encoded sometimes
         key = urllib.parse.unquote(key, encoding="utf-8")
@@ -71,6 +74,7 @@ def process_import_function(event, context):
         if jurisdiction_abbreviation not in unique_jurisdictions:
             unique_jurisdictions[jurisdiction_abbreviation] = {
                 "id": jurisdiction_id,
+                "name": jurisdiction_name,
                 "keys": [],
             }
         unique_jurisdictions[jurisdiction_abbreviation]["keys"].append(key)
@@ -95,11 +99,18 @@ def process_import_function(event, context):
 
     # Process imports for all files per jurisdiction in a batch
     for abbreviation, juris in unique_jurisdictions.items():
-
         logger.info(f"importing {juris['id']}...")
 
         try:
             do_import(juris["id"], f"{datadir}{abbreviation}")
+            stats.send_last_run(
+                "last_collection_run_time",
+                {
+                    "jurisdiction": juris["name"],
+                    "scrape_type": "import",
+                },
+            )
+
         except Exception as e:
             logger.error(
                 f"Error importing jurisdiction {juris['id']}: {e}"
@@ -108,6 +119,7 @@ def process_import_function(event, context):
         archive_files(bucket, juris["keys"])
 
     logger.info(f"{len(all_files)} files processed")
+    stats.close()
 
 
 def remove_duplicate_message(items):
@@ -135,7 +147,7 @@ def archive_files(bucket, all_keys, dest="archive"):
     Args:
         bucket (str): The s3 bucket name
         all_keys (list): The key of the file to be archived
-        dest (str): The destination folder to move the file to
+        dest (str): The destination folder to move the file to.
     Returns:
         None
 
@@ -187,7 +199,6 @@ def retrieve_messages_from_queue():
     message_bodies = []
 
     if messages:
-
         for message in messages:
             message_bodies.append(message.get("Body"))
 
@@ -199,7 +210,7 @@ def retrieve_messages_from_queue():
     return message_bodies
 
 
-def batch_retrieval_from_sqs(batch_size=300):
+def batch_retrieval_from_sqs(batch_size=400):
     """
     Retrieve messages from SQS in batches
     """
@@ -233,9 +244,8 @@ def do_atomic(func, datadir, type_):
     with transaction.atomic():
         logger.info(f"Running {type_}...")
         try:
-
             signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(60)
+            signal.alarm(120)
             return func(datadir)
         except TimeoutError:
             logger.error(f"Timeout running {type_}")
