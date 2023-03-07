@@ -210,7 +210,7 @@ def retrieve_messages_from_queue():
     return message_bodies
 
 
-def batch_retrieval_from_sqs(batch_size=400):
+def batch_retrieval_from_sqs(batch_size=600):
     """
     Retrieve messages from SQS in batches
     """
