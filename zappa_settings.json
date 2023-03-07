@@ -28,7 +28,7 @@
         "apigateway_enabled": false,
         "django_settings": "settings",
         "slim_handler": true,
-        "timeout_seconds": 700,
+        "timeout_seconds": 900,
         "lambda_concurrency": 10,
         "memory_size": 512
     }
