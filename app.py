@@ -110,13 +110,12 @@ def process_import_function(event, context):
                     "scrape_type": "import",
                 },
             )
-
+            archive_files(bucket, juris["keys"])
         except Exception as e:
             logger.error(
                 f"Error importing jurisdiction {juris['id']}: {e}"
             )  # noqa: E501
             continue
-        archive_files(bucket, juris["keys"])
 
     logger.info(f"{len(all_files)} files processed")
     stats.close()
