@@ -12,7 +12,7 @@
         "apigateway_enabled": false,
         "django_settings": "settings",
         "slim_handler": true,
-        "debug": false,
+        "log_level": "INFO",
         "timeout_seconds": 700,
         "lambda_concurrency": 0
     },
@@ -28,7 +28,7 @@
         "role_name": "ZappaLambdaRole",
         "apigateway_enabled": false,
         "django_settings": "settings",
-        "debug": false,
+        "log_level": "INFO",
         "slim_handler": true,
         "timeout_seconds": 900,
         "lambda_concurrency": 10,
