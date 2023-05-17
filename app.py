@@ -9,7 +9,15 @@ from django.db import transaction  # type: ignore
 from openstates.cli.reports import generate_session_report
 from openstates.utils.instrument import Instrumentation
 
-logger = logging.getLogger("openstates")
+logging.getLogger("botocore").setLevel(logging.WARNING)
+logging.getLogger("boto3").setLevel(logging.WARNING)
+logging.getLogger("s3transfer").setLevel(logging.WARNING)
+logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
+
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
 s3_client = boto3.client("s3")
 s3_resource = boto3.resource("s3")
 
@@ -140,8 +148,9 @@ def remove_duplicate_message(items):
 def archive_files(bucket, all_keys, dest="archive"):
     """
     Archive the processed file to avoid possible scenarios of race conditions.
-    We currently use meta.client.copy instead of client.copy b/c it can copy
-    multiple files via multiple threads, since we have batching in view.
+    We currently use `meta.client.copy` instead of `client.copy` b/c
+    it can copy multiple files via multiple threads, since we have batching
+    in view.
 
     Args:
         bucket (str): The s3 bucket name
