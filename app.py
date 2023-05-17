@@ -148,8 +148,9 @@ def remove_duplicate_message(items):
 def archive_files(bucket, all_keys, dest="archive"):
     """
     Archive the processed file to avoid possible scenarios of race conditions.
-    We currently use `meta.client.copy` instead of `client.copy` b/c it can copy
-    multiple files via multiple threads, since we have batching in view.
+    We currently use `meta.client.copy` instead of `client.copy` b/c
+    it can copy multiple files via multiple threads, since we have batching
+    in view.
 
     Args:
         bucket (str): The s3 bucket name
