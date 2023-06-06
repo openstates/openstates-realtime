@@ -20,6 +20,8 @@ logger.setLevel(logging.INFO)
 
 s3_client = boto3.client("s3")
 s3_resource = boto3.resource("s3")
+sqs = boto3.client("sqs")
+dead_letter_queue_url = "arn:aws:sqs:us-east-1:189670762819:openstates-realtime-dlq"
 
 stats = Instrumentation()
 
@@ -59,10 +61,11 @@ def process_import_function(event, context):
     bucket = messages[0].get("bucket")
 
     for message in messages:
-        bucket = message.get("bucket")
-        key = message.get("file_path")
-        jurisdiction_id = message.get("jurisdiction_id")
-        jurisdiction_name = message.get("jurisdiction_name")
+        body = json.loads(message["body"])
+        bucket = body.get("bucket")
+        key = body.get("file_path")
+        jurisdiction_id = body.get("jurisdiction_id")
+        jurisdiction_name = body.get("jurisdiction_name")
 
         # for some reason, the key is url encoded sometimes
         key = urllib.parse.unquote(key, encoding="utf-8")
@@ -110,39 +113,53 @@ def process_import_function(event, context):
         logger.info(f"importing {juris['id']}...")
 
         try:
-            do_import(juris["id"], f"{datadir}{abbreviation}")
-            stats.send_last_run(
-                "last_collection_run_time",
-                {
-                    "jurisdiction": juris["name"],
-                    "scrape_type": "import",
-                },
-            )
-            archive_files(bucket, juris["keys"])
+            if do_import(juris["id"], f"{datadir}{abbreviation}"):
+                archive_files(bucket, juris["keys"])
+            # Delete received message from queue
+            sqs.delete_message(QueueUrl=sqs_url, ReceiptHandle=receipt_handle)
+            logger.info(f"Received and deleted message: {receipt_handle}")
         except Exception as e:
-            logger.error(
-                f"Error importing jurisdiction {juris['id']}: {e}"
-            )  # noqa: E501
+            logger.error(f"Error importing jurisdiction {juris['id']}: {e}")
+            # Move the message to the dead letter queue
+            receipt_handle = None
+            for message in messages:
+                if message.get("jurisdiction_id") == juris["id"]:
+                    receipt_handle = message["receipt_handle"]
+                    break
+            if receipt_handle:
+                move_message_to_dead_letter(receipt_handle)
             continue
 
     logger.info(f"{len(all_files)} files processed")
     stats.close()
 
 
+def move_message_to_dead_letter(receipt_handle):
+    """
+    Move the message to the dead letter queue.
+
+    Args:
+        receipt_handle (str): The receipt handle of the message
+    """
+    sqs.change_message_visibility(
+        QueueUrl=dead_letter_queue_url,
+        ReceiptHandle=receipt_handle,
+        VisibilityTimeout=0,
+    )
+    logger.info(f"Moved message to dead letter queue: {receipt_handle}")
+
+
 def remove_duplicate_message(items):
     """
     Remove duplicate messages from the list
     """
-
-    # parse the JSON strings and create a list of dictionaries
-    parsed_items = [json.loads(item) for item in items]
-
-    # Use another list comprehension to create a list of unique dictionaries
-    filtered_items = [
-        dict(i) for i in set(tuple(i.items()) for i in parsed_items)  # noqa: E501
-    ]
-
-    return filtered_items
+    unique_messages = set()
+    filtered_messages = []
+    for item in items:
+        if item["body"] not in unique_messages:
+            unique_messages.add(item["body"])
+            filtered_messages.append(item)
+    return filtered_messages
 
 
 def archive_files(bucket, all_keys, dest="archive"):
@@ -172,7 +189,7 @@ def archive_files(bucket, all_keys, dest="archive"):
             s3_resource.meta.client.copy(
                 copy_source,
                 bucket,
-                f"{dest}/{datetime.datetime.utcnow().date()}/{key}",  # noqa: E501
+                f"{dest}/{datetime.datetime.utcnow().date()}/{key}",
             )
         except Exception as e:
             logger.error(f"Error archiving file {key}: {e}")
@@ -189,7 +206,6 @@ def retrieve_messages_from_queue():
     """
 
     # Create SQS client
-    sqs = boto3.client("sqs")
 
     sqs_url = os.environ.get("SQS_QUEUE_URL")
 
@@ -208,13 +224,11 @@ def retrieve_messages_from_queue():
 
     if messages:
         for message in messages:
-            message_bodies.append(message.get("Body"))
-
             receipt_handle = message["ReceiptHandle"]
+            message_bodies.append(
+                {"body": message.get("Body"), "receipt_handle": receipt_handle}
+            )
 
-            # Delete received message from queue
-            sqs.delete_message(QueueUrl=sqs_url, ReceiptHandle=receipt_handle)
-            logger.info(f"Received and deleted message: {receipt_handle}")
     return message_bodies
 
 
@@ -257,7 +271,6 @@ def do_atomic(func, datadir, type_):
             return func(datadir)
         except TimeoutError:
             logger.error(f"Timeout running {type_}")
-            # noqa: E501
         finally:
             # deactivate the alarm
             signal.alarm(0)
@@ -267,15 +280,15 @@ def timeout_handler(signum, frame):
     raise TimeoutError("Timeout occurred while running the do_atomic function")
 
 
-def do_import(jurisdiction_id: str, datadir: str) -> None:
+def do_import(jurisdiction_id: str, datadir: str) -> bool:
     """
     Import data for a jurisdiction into DB
 
     Args:
         jurisdiction_id (str): The jurisdiction id
-        datadir (str): The directory where the data is stored temproarily
+        datadir (str): The directory where the data is stored temporarily
     Returns:
-        None
+        bool: True if the import is successful, False otherwise
 
     """
     # import inside here because to avoid loading Django code unnecessarily
@@ -295,17 +308,23 @@ def do_import(jurisdiction_id: str, datadir: str) -> None:
     event_importer = EventImporter(jurisdiction_id, vote_event_importer)
     logger.info(f"Datadir: {datadir}")
 
-    do_atomic(juris_importer.import_directory, datadir, "jurisdictions")
-    do_atomic(bill_importer.import_directory, datadir, "bill")  # noqa: E501
-    do_atomic(vote_event_importer.import_directory, datadir, "vote_event")
-    do_atomic(event_importer.import_directory, datadir, "event")  # noqa: E501
-    Jurisdiction.objects.filter(id=jurisdiction_id).update(
-        latest_bill_update=datetime.datetime.utcnow()
-    )
+    try:
+        do_atomic(juris_importer.import_directory, datadir, "jurisdictions")
+        do_atomic(bill_importer.import_directory, datadir, "bill")
+        do_atomic(vote_event_importer.import_directory, datadir, "vote_event")
+        do_atomic(event_importer.import_directory, datadir, "event")
+        Jurisdiction.objects.filter(id=jurisdiction_id).update(
+            latest_bill_update=datetime.datetime.utcnow()
+        )
 
-    # compile info on all sessions that were updated in this run
-    seen_sessions = set()
-    seen_sessions.update(bill_importer.get_seen_sessions())
-    seen_sessions.update(vote_event_importer.get_seen_sessions())
-    for session in seen_sessions:
-        generate_session_report(session)
+        # compile info on all sessions that were updated in this run
+        seen_sessions = set()
+        seen_sessions.update(bill_importer.get_seen_sessions())
+        seen_sessions.update(vote_event_importer.get_seen_sessions())
+        for session in seen_sessions:
+            generate_session_report(session)
+
+        return True
+    except Exception as e:
+        logger.error(f"Error importing jurisdiction {jurisdiction_id}: {e}")
+        return False
