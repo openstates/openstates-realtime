@@ -289,7 +289,7 @@ def do_import(jurisdiction_id: str, datadir: str) -> None:
     # datadir = os.path.join(settings.SCRAPED_DATA_DIR, state)
 
     juris_importer = JurisdictionImporter(jurisdiction_id)
-    bill_importer = BillImporter(jurisdiction_id)
+    bill_importer = BillImporter(jurisdiction_id, do_postimport=False)
     vote_event_importer = VoteEventImporter(jurisdiction_id, bill_importer)
     event_importer = EventImporter(jurisdiction_id, vote_event_importer)
     logger.info(f"Datadir: {datadir}")
