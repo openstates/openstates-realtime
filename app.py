@@ -6,7 +6,6 @@ import os
 import signal
 import urllib.parse
 from django.db import transaction  # type: ignore
-from openstates.cli.reports import generate_session_report
 from openstates.utils.instrument import Instrumentation
 
 logging.getLogger("botocore").setLevel(logging.WARNING)
