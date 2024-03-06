@@ -13,7 +13,6 @@ logging.getLogger("boto3").setLevel(logging.WARNING)
 logging.getLogger("s3transfer").setLevel(logging.WARNING)
 logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 
-
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -289,8 +288,11 @@ def do_import(jurisdiction_id: str, datadir: str) -> None:
     # datadir = os.path.join(settings.SCRAPED_DATA_DIR, state)
 
     juris_importer = JurisdictionImporter(jurisdiction_id)
+    # bills postimport disabled because bill postimport does some expensive SQL, and we want this to be fast
     bill_importer = BillImporter(jurisdiction_id, do_postimport=False)
-    vote_event_importer = VoteEventImporter(jurisdiction_id, bill_importer)
+    # votes postimport disabled because it will delete all vote events for the related bill
+    # except the vote event being processed now, causing votes to be deleted and re-created
+    vote_event_importer = VoteEventImporter(jurisdiction_id, bill_importer, do_postimport=False)
     event_importer = EventImporter(jurisdiction_id, vote_event_importer)
     logger.info(f"Datadir: {datadir}")
 
