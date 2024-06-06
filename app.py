@@ -101,7 +101,7 @@ def process_import_function(event, context):
             logger.error(f"Error downloading file: {e}")
             all_files.remove(filedir)
             continue
-    # Process imports for all files per jurisdiction in a batch
+        # Process imports for all files per jurisdiction in a batch
         for abbreviation, juris in unique_jurisdictions.items():
             logger.info(f"importing {juris['id']}...")
 
