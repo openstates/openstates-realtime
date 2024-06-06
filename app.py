@@ -109,12 +109,14 @@ def process_import_function(event, context):
 
         try:
             do_import(juris["id"], f"{datadir}{abbreviation}")
-            stats.send_last_run(
-                "last_collection_run_time",
-                {
-                    "jurisdiction": juris["name"],
-                    "scrape_type": "import",
-                },
+            stats.write_stats(
+                [
+                    {
+                        "metric": "objects",
+                        "fields": {"realtime_import": 1},
+                        "tags": {"jurisdiction": juris["name"]}
+                    }
+                ]
             )
             archive_files(bucket, juris["keys"])
         except Exception as e:
