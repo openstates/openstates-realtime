@@ -54,13 +54,12 @@ def process_import_function(event, context):
     if not messages:
         return
 
-    bucket = messages[0].get("bucket")
-
     for message in messages:
         bucket = message.get("bucket")
         key = message.get("file_path")
         jurisdiction_id = message.get("jurisdiction_id")
         jurisdiction_name = message.get("jurisdiction_name")
+        is_archive_files = message.get("is_archive_files", False)
 
         # for some reason, the key is url encoded sometimes
         key = urllib.parse.unquote(key, encoding="utf-8")
@@ -102,26 +101,26 @@ def process_import_function(event, context):
             logger.error(f"Error downloading file: {e}")
             all_files.remove(filedir)
             continue
-
     # Process imports for all files per jurisdiction in a batch
-    for abbreviation, juris in unique_jurisdictions.items():
-        logger.info(f"importing {juris['id']}...")
+        for abbreviation, juris in unique_jurisdictions.items():
+            logger.info(f"importing {juris['id']}...")
 
-        try:
-            do_import(juris["id"], f"{datadir}{abbreviation}")
-            stats.send_last_run(
-                "last_collection_run_time",
-                {
-                    "jurisdiction": juris["name"],
-                    "scrape_type": "import",
-                },
-            )
-            archive_files(bucket, juris["keys"])
-        except Exception as e:
-            logger.error(
-                f"Error importing jurisdiction {juris['id']}: {e}"
-            )  # noqa: E501
-            continue
+            try:
+                do_import(juris["id"], f"{datadir}{abbreviation}")
+                stats.send_last_run(
+                    "last_collection_run_time",
+                    {
+                        "jurisdiction": juris["name"],
+                        "scrape_type": "import",
+                    },
+                )
+                if is_archive_files:
+                    archive_files(bucket, juris["keys"])
+            except Exception as e:
+                logger.error(
+                    f"Error importing jurisdiction {juris['id']}: {e}"
+                )  # noqa: E501
+                continue
 
     logger.info(f"{len(all_files)} files processed")
     stats.close()
