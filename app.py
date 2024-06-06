@@ -55,16 +55,17 @@ def process_import_function(event, context):
         return
 
     bucket = messages[0].get("bucket")
-    # Archiving processed realtime bills defaults to False
-    file_archiving_enabled = context.file_archiving_enabled
 
     for message in messages:
         bucket = message.get("bucket")
         key = message.get("file_path")
         jurisdiction_id = message.get("jurisdiction_id")
         jurisdiction_name = message.get("jurisdiction_name")
-        file_archiving_enabled = file_archiving_enabled or message.get(
-            "file_archiving_enabled"
+        # Archiving processed realtime bills defaults to False, except it was explicitly set on
+        # cli or on task-definitions Repo as <--archive> or
+        # added on AWS admin console for os-realtime lambda function config as file_archiving_enabled=True
+        file_archiving_enabled = (
+            message.get("file_archiving_enabled") or context.file_archiving_enabled
         )
 
         # for some reason, the key is url encoded sometimes
