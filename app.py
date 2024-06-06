@@ -61,11 +61,13 @@ def process_import_function(event, context):
         key = message.get("file_path")
         jurisdiction_id = message.get("jurisdiction_id")
         jurisdiction_name = message.get("jurisdiction_name")
-        # Archiving processed realtime bills defaults to False, except it was explicitly set on
-        # cli or on task-definitions Repo as <--archive> or
-        # added on AWS admin console for os-realtime lambda function config as file_archiving_enabled=True
+        # Archiving processed realtime bills defaults to False,
+        # except it was explicitly set on cli or on task-definitions
+        # Repo as <--archive> or added on AWS admin console for os-realtime
+        # lambda function config as file_archiving_enabled=True
         file_archiving_enabled = (
-            message.get("file_archiving_enabled") or context.file_archiving_enabled
+            message.get("file_archiving_enabled")
+            or context.file_archiving_enabled
         )
 
         # for some reason, the key is url encoded sometimes
@@ -132,7 +134,9 @@ def process_import_function(event, context):
             s3_client.delete_object(Bucket=bucket, Key=file_path)
             logger.info(f"Deleted file :: {file_path}")
         except Exception as e:
-            logger.error(f"Error importing jurisdiction {jur_id}: {e}")  # noqa: E501
+            logger.error(
+                f"Error importing jurisdiction {jur_id}: {e}"
+            )  # noqa: E501
             continue
 
     logger.info(f"{len(all_files)} files processed")
@@ -149,7 +153,8 @@ def remove_duplicate_message(items):
 
     # Use another list comprehension to create a list of unique dictionaries
     filtered_items = [
-        dict(i) for i in set(tuple(i.items()) for i in parsed_items)  # noqa: E501
+        dict(i)
+        for i in set(tuple(i.items()) for i in parsed_items)  # noqa: E501
     ]
 
     return filtered_items
