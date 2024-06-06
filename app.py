@@ -56,14 +56,16 @@ def process_import_function(event, context):
 
     bucket = messages[0].get("bucket")
     # Archiving processed realtime bills defaults to False
-    is_archive_files = False
+    file_archiving_enabled = context.file_archiving_enabled
 
     for message in messages:
         bucket = message.get("bucket")
         key = message.get("file_path")
         jurisdiction_id = message.get("jurisdiction_id")
         jurisdiction_name = message.get("jurisdiction_name")
-        is_archive_files = message.get("is_archive_files")
+        file_archiving_enabled = file_archiving_enabled or message.get(
+            "file_archiving_enabled"
+        )
 
         # for some reason, the key is url encoded sometimes
         key = urllib.parse.unquote(key, encoding="utf-8")
@@ -107,10 +109,11 @@ def process_import_function(event, context):
             continue
     # Process imports for all files per jurisdiction in a batch
     for abbreviation, juris in unique_jurisdictions.items():
-        logger.info(f"importing {juris['id']}...")
-
+        file_path = juris["keys"]
+        jur_id = juris["id"]
+        logger.info(f"importing {jur_id}...")
         try:
-            do_import(juris["id"], f"{datadir}{abbreviation}")
+            do_import(jur_id, f"{datadir}{abbreviation}")
             stats.send_last_run(
                 "last_collection_run_time",
                 {
@@ -118,12 +121,15 @@ def process_import_function(event, context):
                     "scrape_type": "import",
                 },
             )
-            if is_archive_files:
-                archive_files(bucket, juris["keys"])
+
+            if file_archiving_enabled:
+                archive_files(bucket, file_path)
+
+            # delete object from original bucket
+            s3_client.delete_object(Bucket=bucket, Key=file_path)
+            logger.info(f"Deleted file :: {file_path}")
         except Exception as e:
-            logger.error(
-                f"Error importing jurisdiction {juris['id']}: {e}"
-            )  # noqa: E501
+            logger.error(f"Error importing jurisdiction {jur_id}: {e}")  # noqa: E501
             continue
 
     logger.info(f"{len(all_files)} files processed")
@@ -178,10 +184,6 @@ def archive_files(bucket, all_keys, dest="archive"):
         except Exception as e:
             logger.error(f"Error archiving file {key}: {e}")
             continue
-
-        # delete object from original bucket
-        s3_client.delete_object(Bucket=bucket, Key=key)
-        logger.info(f"Deleted file :: {key}")
 
 
 def retrieve_messages_from_queue():
