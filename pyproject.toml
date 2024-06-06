@@ -18,3 +18,10 @@ black = "^24.4.2"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[flake8]
+max-line-length = 79
+
+[tool.black]
+line-length = 79
+
