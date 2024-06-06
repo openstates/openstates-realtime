@@ -120,7 +120,7 @@ def process_import_function(event, context):
                     {
                         "metric": "objects",
                         "fields": {"realtime_import": 1},
-                        "tags": {"jurisdiction": juris["name"]}
+                        "tags": {"jurisdiction": juris["name"]},
                     }
                 ]
             )
