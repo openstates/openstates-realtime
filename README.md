@@ -36,6 +36,11 @@ AWS_DEFAULT_PROFILE=openstates poetry run zappa update [stage]
 
 Where [stage] is the stage to deploy to. This can be either dev or prod.
 
+## Deploy via Docker
+- Make a copy of Dockerfile-example to create Dockerfile
+- Update  `AWS_ACCESS_KEY_ID` and  `AWS_SECRET_ACCESS_KEY` with your creds
+- Run `docker build --progress=plain .`
+
 ## S3 Bucket Lifecyle
 
 The S3 bucket that the lambda function is uses should have a lifecycle policy that deletes the files after 2
