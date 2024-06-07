@@ -112,7 +112,7 @@ def process_import_function(event, context):
             continue
     # Process imports for all files per jurisdiction in a batch
     for abbreviation, juris in unique_jurisdictions.items():
-        file_path = juris["keys"]
+        file_paths = juris["keys"]
         jur_id = juris["id"]
         logger.info(f"importing {jur_id}...")
         try:
@@ -128,11 +128,11 @@ def process_import_function(event, context):
             )
 
             if file_archiving_enabled:
-                archive_files(bucket, file_path)
+                archive_files(bucket, file_paths)
 
             # delete object from original bucket
-            s3_client.delete_object(Bucket=bucket, Key=file_path)
-            logger.info(f"Deleted file :: {file_path}")
+            s3_client.delete_object(Bucket=bucket, Key=file_paths)
+            logger.info(f"Deleted files :: {file_paths}")
         except Exception as e:
             logger.error(
                 f"Error importing jurisdiction {jur_id}: {e}"
