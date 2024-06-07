@@ -1,9 +1,11 @@
 FROM python:3.9-alpine
-RUN apk add --update --no-cache build-base libffi-dev
+RUN apk add --update --no-cache build-base libffi-dev rust cargo
 
 ENV AWS_ACCESS_KEY_ID=XXXXX
 ENV AWS_SECRET_ACCESS_KEY=XXXXX
 ENV AWS_DEFAULT_REGION=us-east-1
+ENV BUILD_LIB=false
+
 
 RUN pip install poetry
 
