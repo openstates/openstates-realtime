@@ -55,7 +55,7 @@ def process_import_function(event, context):
         return
 
     bucket = messages[0].get("bucket")
-    file_archiving_enabled = context.file_archiving_enabled
+    file_archiving_enabled = os.environ.get("FILE_ARCHIVING_ENABLED")
     for message in messages:
         bucket = message.get("bucket")
         key = message.get("file_path")
@@ -65,7 +65,7 @@ def process_import_function(event, context):
         # Archiving processed realtime bills defaults to False, except it was
         # explicitly set on cli or on task-definitions Repo as <--archive>
         # or added on AWS admin console for os-realtime lambda function
-        # config as file_archiving_enabled=True
+        # config as FILE_ARCHIVING_ENABLED=True
         file_archiving_enabled = (
             message.get("file_archiving_enabled") or file_archiving_enabled
         )
