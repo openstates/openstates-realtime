@@ -12,8 +12,16 @@ zappa = "^0.56.1"
 psycopg2-binary = "^2.9.5"
 textract = "^1.6.5"
 extract-msg = "0.28.7"
+black = "^24.4.2"
 
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[flake8]
+max-line-length = 79
+
+[tool.black]
+line-length = 79
+
