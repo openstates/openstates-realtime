@@ -126,8 +126,11 @@ def process_import_function(event, context):
                     }
                 ]
             )
-
-            if file_archiving_enabled:
+            # Possible that these values are strings instead of booleans
+            if (
+                file_archiving_enabled
+                and isinstance(file_archiving_enabled, bool)
+            ) or file_archiving_enabled == "True":
                 archive_files(bucket, file_paths)
 
             # delete object from original bucket
