@@ -228,7 +228,7 @@ def retrieve_messages_from_queue():
 
             # Delete received message from queue
             sqs.delete_message(QueueUrl=sqs_url, ReceiptHandle=receipt_handle)
-            logger.info(f"Received and deleted message: {receipt_handle}")
+            logger.debug(f"Received and deleted message: {receipt_handle}")
     return message_bodies
 
 
@@ -243,7 +243,9 @@ def batch_retrieval_from_sqs(batch_size=600):
         msg.extend(retrieve_messages_from_queue())
     filtered_messages = remove_duplicate_message(msg)
 
-    logger.info(f"message_count: {len(filtered_messages)}")
+    logger.info(
+        f"message_count: {len(filtered_messages)} received & deleted from SQS"
+    )
     return filtered_messages
 
 

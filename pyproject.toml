@@ -7,12 +7,13 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-openstates = "^6.17.9"
+openstates = "^6.20.5"
 zappa = "^0.56.1"
 psycopg2-binary = "^2.9.5"
 textract = "^1.6.5"
 extract-msg = "0.28.7"
 black = "^24.4.2"
+setuptools = "69.5.1"
 
 
 [build-system]
