@@ -244,7 +244,7 @@ def batch_retrieval_from_sqs(batch_size=600):
     filtered_messages = remove_duplicate_message(msg)
 
     logger.info(
-        f"message_count: {len(filtered_messages)} received and deleted from SQS"
+        f"message_count: {len(filtered_messages)} received & deleted from SQS"
     )
     return filtered_messages
 
