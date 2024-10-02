@@ -14,6 +14,11 @@ Run the following commands to setup the project
 poetry install
 ```
 
+### ZAPPA BUG NOTE
+
+Please note that right now setuptools is pinned to an old version to mitigate a Zappa bug that was very recently fixed,
+but seems to not be released in any easy-to-poetry-install way. [Bug details here.](https://github.com/zappa/Zappa/issues/1349)
+
 ## Deployment
 
 Deployment depends on setup above, as well as having the
