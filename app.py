@@ -134,7 +134,8 @@ def process_import_function(event, context):
                 archive_files(bucket, file_paths)
 
             # delete object from original bucket
-            s3_client.delete_object(Bucket=bucket, Key=file_paths)
+            for file_path in file_paths:
+                s3_client.delete_object(Bucket=bucket, Key=file_path)
             logger.info(f"Deleted files :: {file_paths}")
         except Exception as e:
             logger.error(
