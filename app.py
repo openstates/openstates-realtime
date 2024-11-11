@@ -83,7 +83,7 @@ def process_import_function(event, context):
         # or added on AWS admin console for os-realtime lambda function
         # config as FILE_ARCHIVING_ENABLED=True
         file_archiving_enabled = (
-            message.get("file_archiving_enabled") or file_archiving_enabled
+                message.get("file_archiving_enabled") or file_archiving_enabled
         )
 
         # for some reason, the key is url encoded sometimes
@@ -147,8 +147,8 @@ def process_import_function(event, context):
             )
             # Possible that these values are strings instead of booleans
             if (
-                file_archiving_enabled
-                and isinstance(file_archiving_enabled, bool)
+                    file_archiving_enabled
+                    and isinstance(file_archiving_enabled, bool)
             ) or file_archiving_enabled == "True":
                 archive_individual_files(bucket, file_paths, filedir)
 
