@@ -66,7 +66,9 @@ def process_import_function(event, context):
     # Get the uploaded file's information
     sqs_fetch_batch_size = env.int("SQS_FETCH_BATCH_SIZE", 600)
     sqs_delete_fetched_messages = env.bool("SQS_DELETE_FETCHED_MESSAGES", True)
-    messages = batch_retrieval_from_sqs(sqs_fetch_batch_size, sqs_delete_fetched_messages)
+    messages = batch_retrieval_from_sqs(
+        sqs_fetch_batch_size, sqs_delete_fetched_messages
+    )
     if not messages:
         return
 
@@ -83,7 +85,7 @@ def process_import_function(event, context):
         # or added on AWS admin console for os-realtime lambda function
         # config as FILE_ARCHIVING_ENABLED=True
         file_archiving_enabled = (
-                message.get("file_archiving_enabled") or file_archiving_enabled
+            message.get("file_archiving_enabled") or file_archiving_enabled
         )
 
         # for some reason, the key is url encoded sometimes
@@ -131,7 +133,9 @@ def process_import_function(event, context):
         file_paths = juris["keys"]
         jur_id = juris["id"]
         if len(file_paths) == 0:
-            logger.error(f"Was about to do an import of {jur_id} with an empty file_paths list, skipping it")
+            logger.error(
+                f"Was about to do an import of {jur_id} with an empty file_paths list, skipping it"
+            )
             continue
         logger.info(f"importing {jur_id}...")
         try:
@@ -147,8 +151,8 @@ def process_import_function(event, context):
             )
             # Possible that these values are strings instead of booleans
             if (
-                    file_archiving_enabled
-                    and isinstance(file_archiving_enabled, bool)
+                file_archiving_enabled
+                and isinstance(file_archiving_enabled, bool)
             ) or file_archiving_enabled == "True":
                 archive_individual_files(bucket, file_paths, filedir)
 
@@ -160,7 +164,9 @@ def process_import_function(event, context):
             # Create zip of files we processed for debugging
             failed_import_dir = f"{datadir}{abbreviation}"
             # upload zip file that contains the directory failed_import_dir
-            archive_key = archive_jurisdiction_file_folder(abbreviation, bucket, datadir, failed_import_dir)
+            archive_key = archive_jurisdiction_file_folder(
+                abbreviation, bucket, datadir, failed_import_dir
+            )
 
             logger.error(
                 f"Error importing jurisdiction {jur_id}, stored snapshot of import dir as {archive_key}, error: {e}"
@@ -188,18 +194,24 @@ def remove_duplicate_message(items):
     return filtered_items
 
 
-def archive_jurisdiction_file_folder(jurisdiction_abbreviation, bucket, tmp_folder_path, file_folder_path):
+def archive_jurisdiction_file_folder(
+    jurisdiction_abbreviation, bucket, tmp_folder_path, file_folder_path
+):
     # Make a zip file of the jurisdiction's source data
     now = datetime.datetime.now()
     zip_filename = f"{jurisdiction_abbreviation}-{now.isoformat()}"
     zip_filepath = os.path.join(tmp_folder_path, zip_filename)
     # shutil puts all the files into the zip folder at root level. It does not include the folder in contents
     # it does add the ".zip" extension
-    archive_filename = shutil.make_archive(zip_filepath, 'zip', file_folder_path)
+    archive_filename = shutil.make_archive(
+        zip_filepath, "zip", file_folder_path
+    )
 
     # Upload to archive section of S3 bucket
     s3_destination_key = f"archive/{zip_filename}.zip"
-    s3_resource.meta.client.upload_file(archive_filename, bucket, s3_destination_key)
+    s3_resource.meta.client.upload_file(
+        archive_filename, bucket, s3_destination_key
+    )
 
     return s3_destination_key
 
@@ -270,10 +282,14 @@ def retrieve_messages_from_queue(delete_after_fetch=True):
 
             if delete_after_fetch:
                 # Delete received message from queue
-                sqs.delete_message(QueueUrl=sqs_url, ReceiptHandle=receipt_handle)
+                sqs.delete_message(
+                    QueueUrl=sqs_url, ReceiptHandle=receipt_handle
+                )
                 logger.debug(f"Received and deleted message: {receipt_handle}")
             else:
-                logger.debug(f"Received message (no deletion): {receipt_handle}")
+                logger.debug(
+                    f"Received message (no deletion): {receipt_handle}"
+                )
     return message_bodies
 
 
@@ -288,9 +304,7 @@ def batch_retrieval_from_sqs(batch_size=600, delete_after_fetch=True):
         msg.extend(retrieve_messages_from_queue(delete_after_fetch))
     filtered_messages = remove_duplicate_message(msg)
 
-    logger.info(
-        f"message_count: {len(filtered_messages)} received from SQS"
-    )
+    logger.info(f"message_count: {len(filtered_messages)} received from SQS")
     return filtered_messages
 
 
