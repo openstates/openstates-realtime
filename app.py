@@ -10,6 +10,9 @@ import urllib.parse
 from django.db import transaction  # type: ignore
 from openstates.utils.instrument import Instrumentation
 
+env = Env()
+env.read_env()
+
 logging.getLogger("botocore").setLevel(logging.WARNING)
 logging.getLogger("boto3").setLevel(logging.WARNING)
 logging.getLogger("s3transfer").setLevel(logging.WARNING)
@@ -22,9 +25,6 @@ s3_client = boto3.client("s3")
 s3_resource = boto3.resource("s3")
 
 stats = Instrumentation()
-
-env = Env()
-env.read_env()
 
 
 def process_import_function(event, context):
@@ -284,11 +284,11 @@ def retrieve_messages_from_queue(delete_after_fetch=True):
                 sqs.delete_message(
                     QueueUrl=sqs_url, ReceiptHandle=receipt_handle
                 )
-                logger.debug(f"Received and deleted message: {receipt_handle}")
-            else:
-                logger.debug(
-                    f"Received message (no deletion): {receipt_handle}"
-                )
+                # logger.debug(f"Received and deleted message: {receipt_handle}")
+            # else:
+            #     logger.debug(
+            #         f"Received message (no deletion): {receipt_handle}"
+            #     )
     return message_bodies
 
 
