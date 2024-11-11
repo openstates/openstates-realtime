@@ -134,7 +134,8 @@ def process_import_function(event, context):
         jur_id = juris["id"]
         if len(file_paths) == 0:
             logger.error(
-                f"Was about to do an import of {jur_id} with an empty file_paths list, skipping it"
+                f"Was about to do an import of {jur_id} "
+                f"with an empty file_paths list, skipping it"
             )
             continue
         logger.info(f"importing {jur_id}...")
@@ -169,7 +170,8 @@ def process_import_function(event, context):
             )
 
             logger.error(
-                f"Error importing jurisdiction {jur_id}, stored snapshot of import dir as {archive_key}, error: {e}"
+                f"Error importing jurisdiction {jur_id}, "
+                f"stored snapshot of import dir as {archive_key}, error: {e}"
             )  # noqa: E501
             continue
 
@@ -201,7 +203,8 @@ def archive_jurisdiction_file_folder(
     now = datetime.datetime.now()
     zip_filename = f"{jurisdiction_abbreviation}-{now.isoformat()}"
     zip_filepath = os.path.join(tmp_folder_path, zip_filename)
-    # shutil puts all the files into the zip folder at root level. It does not include the folder in contents
+    # shutil puts all the files into the zip folder at root level.
+    # It does not include the folder in contents
     # it does add the ".zip" extension
     archive_filename = shutil.make_archive(
         zip_filepath, "zip", file_folder_path
