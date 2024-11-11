@@ -14,6 +14,7 @@ textract = "^1.6.5"
 extract-msg = "0.28.7"
 black = "^24.4.2"
 setuptools = "69.5.1"
+environs = "^11.1.0"
 
 
 [build-system]

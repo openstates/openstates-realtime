@@ -1,5 +1,6 @@
 import boto3
 import datetime
+from environs import Env
 import json
 import logging
 import os
@@ -21,6 +22,9 @@ s3_client = boto3.client("s3")
 s3_resource = boto3.resource("s3")
 
 stats = Instrumentation()
+
+env = Env()
+env.read_env()
 
 
 def process_import_function(event, context):
@@ -60,19 +64,14 @@ def process_import_function(event, context):
     unique_jurisdictions = {}
 
     # Get the uploaded file's information
-    sqs_fetch_batch_size = int(os.environ.get("SQS_FETCH_BATCH_SIZE", 600))
-    sqs_delete_fetched_messages = os.environ.get("SQS_DELETE_FETCHED_MESSAGES", True)
-    if (
-            sqs_delete_fetched_messages is not False
-            and sqs_delete_fetched_messages.lower() != "true" and sqs_delete_fetched_messages != "1"
-    ):
-        sqs_delete_fetched_messages = True
+    sqs_fetch_batch_size = env.int("SQS_FETCH_BATCH_SIZE", 600)
+    sqs_delete_fetched_messages = env.bool("SQS_DELETE_FETCHED_MESSAGES", True)
     messages = batch_retrieval_from_sqs(sqs_fetch_batch_size, sqs_delete_fetched_messages)
     if not messages:
         return
 
     bucket = messages[0].get("bucket")
-    file_archiving_enabled = os.environ.get("FILE_ARCHIVING_ENABLED")
+    file_archiving_enabled = env.bool("FILE_ARCHIVING_ENABLED", False)
     for message in messages:
         bucket = message.get("bucket")
         key = message.get("file_path")
@@ -248,7 +247,7 @@ def retrieve_messages_from_queue(delete_after_fetch=True):
     # Create SQS client
     sqs = boto3.client("sqs")
 
-    sqs_url = os.environ.get("SQS_QUEUE_URL")
+    sqs_url = env.str("SQS_QUEUE_URL")
 
     # Receive message from SQS queue
     response = sqs.receive_message(
