@@ -86,7 +86,7 @@ def process_import_function(event, context):
         # or added on AWS admin console for os-realtime lambda function
         # config as FILE_ARCHIVING_ENABLED=True
         file_archiving_enabled = (
-            message.get("file_archiving_enabled") or file_archiving_enabled
+                message.get("file_archiving_enabled") or file_archiving_enabled
         )
 
         # for some reason, the key is url encoded sometimes
@@ -194,7 +194,7 @@ def remove_duplicate_message(items):
 
 
 def archive_jurisdiction_file_folder(
-    jurisdiction_abbreviation, bucket, tmp_folder_path, file_folder_path
+        jurisdiction_abbreviation, bucket, tmp_folder_path, file_folder_path
 ):
     # Make a zip file of the jurisdiction's source data
     now = datetime.datetime.now()
@@ -395,6 +395,7 @@ if __name__ == "__main__":
     if sys.argv[1] == "do_import":
         # we need to set up django here, because we're running locally and don't have zappa packaging
         import django
+
         django.setup()
         do_import(sys.argv[2], sys.argv[3])
     else:

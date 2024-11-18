@@ -17,7 +17,8 @@ poetry install
 ### ZAPPA BUG NOTE
 
 Please note that right now setuptools is pinned to an old version to mitigate a Zappa bug that was very recently fixed,
-but seems to not be released in any easy-to-poetry-install way. [Bug details here.](https://github.com/zappa/Zappa/issues/1349)
+but seems to not be released in any easy-to-poetry-install
+way. [Bug details here.](https://github.com/zappa/Zappa/issues/1349)
 
 ## Deployment
 
@@ -25,7 +26,6 @@ Deployment depends on setup above, as well as having the
 [AWS CLI installed](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) and a login profile
 for the CLI that has access to the Open States AWS project. You will use `AWS_DEFAULT_PROFILE` in commands below to
 indicate the name of that login profile. In these examples it will be `openstates`.
-
 
 For the first deployment, run the following command
 
@@ -42,6 +42,7 @@ AWS_DEFAULT_PROFILE=openstates poetry run zappa update [stage]
 Where [stage] is the stage to deploy to. This can be either dev or prod.
 
 ## Deploy via Docker
+
 - Make a copy of Dockerfile-example to create Dockerfile
 - Update  `AWS_ACCESS_KEY_ID` and  `AWS_SECRET_ACCESS_KEY` with your creds
 - Run `docker build --progress=plain .`
@@ -74,13 +75,13 @@ If realtime data processing fails for a particular jurisdiction batch, you'll se
 that looks like this:
 
 > 17:37:32 ERROR root: Error importing jurisdiction ocd-jurisdiction/country:us/government, stored snapshot of
-> import dir as archive/usa-2024-11-18T17:37:31.789982.zip, error: get() returned more than one VoteEvent -- 
+> import dir as archive/usa-2024-11-18T17:37:31.789982.zip, error: get() returned more than one VoteEvent --
 > it returned 2!
 
 The error message will of course vary, but the "Error importing jurisdiction" text is a key you can look for regardless.
 As the message indicates, the code now stores a zipfile containing the objects that were included in the juris-batch
 for which import was attempted. In this case the file is available within the realtime processing S3 bucket at the
-obejct prefix `archive/usa-2024-11-18T17:37:31.789982.zip`. 
+obejct prefix `archive/usa-2024-11-18T17:37:31.789982.zip`.
 
 This file is an import failure snapshot, and consists of pertaining to one specific jurisdiction import batch. The
 entrypoint function does the work of collecting a bunch of SQS messages, sorting data from those into jurisdictions,
@@ -90,7 +91,8 @@ snapshot.
 To debug this failure locally, follow these steps:
 
 1. Download the file to your machine
-2. Unzip the file so that its contents occupy a unique directory, i.e. `unzip -d usa-2024-11-18T17:37:31.789982 usa-2024-11-18T17:37:31.789982.zip`
+2. Unzip the file so that its contents occupy a unique directory,
+   i.e. `unzip -d usa-2024-11-18T17:37:31.789982 usa-2024-11-18T17:37:31.789982.zip`
 3. Decide if you are testing the import into a LOCAL database, or into the AWS Open States database.
 4. Prepare parameters for running `app.py`: `do_import`, `{os_jurisdiction_id}`, `{path_to_snapshot_folder}`
     * `do_import` this tells app.py to run the `do_import` function, rather than exec the whole entrypoint function
