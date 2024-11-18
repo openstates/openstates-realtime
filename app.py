@@ -285,11 +285,6 @@ def retrieve_messages_from_queue(delete_after_fetch=True):
                 sqs.delete_message(
                     QueueUrl=sqs_url, ReceiptHandle=receipt_handle
                 )
-                # logger.debug(f"Received and deleted message: {receipt_handle}")
-            # else:
-            #     logger.debug(
-            #         f"Received message (no deletion): {receipt_handle}"
-            #     )
     return message_bodies
 
 
@@ -388,12 +383,15 @@ def do_import(jurisdiction_id: str, datadir: str) -> None:
 
 # run process_import_function or do_import
 if __name__ == "__main__":
-    # pass arguments to run do_import() process, for reproducing import errors locally
-    # poetry run python app.py do_import {os_jurisdiction_id} {path_to_snapshot_folder}
+    # pass arguments to run do_import() process,
+    # for reproducing import errors locally
+    # poetry run python app.py do_import {os_jurisdiction_id} {path_to_folder}
     # e.g. poetry run python app.py do_import
-    #      "ocd-jurisdiction/country:us/state:ma/government" "/path/to/ma-2024-11-15T12_00_59.748666"
+    #      "ocd-jurisdiction/country:us/state:ma/government"
+    #      "/path/to/ma-2024-11-15T12_00_59.748666"
     if sys.argv[1] == "do_import":
-        # we need to set up django here, because we're running locally and don't have zappa packaging
+        # we need to set up django here, because we're running locally
+        # and don't have zappa packaging
         import django
 
         django.setup()
