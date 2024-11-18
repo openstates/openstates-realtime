@@ -20,7 +20,7 @@ ssm = session.client("ssm")
 parameter = ssm.get_parameter(
     Name=os.environ.get("STAGE_PARAM_NAME"), WithDecryption=True
 )
-POSTGRES_PASSWORD = parameter["Parameter"]["Value"]
+POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", parameter["Parameter"]["Value"])
 
 
 # django settings for tests
