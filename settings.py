@@ -8,7 +8,6 @@ AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
 AWS_SESSION_TOKEN = os.environ.get("AWS_SESSION_TOKEN")
 
-
 # Get db paasword from AWS SSM
 session = boto3.Session(
     aws_access_key_id=AWS_ACCESS_KEY_ID,
@@ -20,8 +19,9 @@ ssm = session.client("ssm")
 parameter = ssm.get_parameter(
     Name=os.environ.get("STAGE_PARAM_NAME"), WithDecryption=True
 )
-POSTGRES_PASSWORD = parameter["Parameter"]["Value"]
-
+POSTGRES_PASSWORD = os.environ.get(
+    "POSTGRES_PASSWORD", parameter["Parameter"]["Value"]
+)
 
 # django settings for tests
 SECRET_KEY = "test"
@@ -29,7 +29,6 @@ INSTALLED_APPS = (
     "django.contrib.contenttypes",
     "openstates.data",
 )
-
 
 MIDDLEWARE_CLASSES = ()
 DATABASES = {

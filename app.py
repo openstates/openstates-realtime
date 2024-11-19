@@ -6,6 +6,7 @@ import logging
 import os
 import shutil
 import signal
+import sys
 import urllib.parse
 from django.db import transaction  # type: ignore
 from openstates.utils.instrument import Instrumentation
@@ -284,11 +285,6 @@ def retrieve_messages_from_queue(delete_after_fetch=True):
                 sqs.delete_message(
                     QueueUrl=sqs_url, ReceiptHandle=receipt_handle
                 )
-                # logger.debug(f"Received and deleted message: {receipt_handle}")
-            # else:
-            #     logger.debug(
-            #         f"Received message (no deletion): {receipt_handle}"
-            #     )
     return message_bodies
 
 
@@ -327,7 +323,7 @@ def do_atomic(func, datadir, type_):
         logger.info(f"Running {type_}...")
         try:
             signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(120)
+            signal.alarm(360)
             return func(datadir)
         except TimeoutError:
             logger.error(f"Timeout running {type_}")
@@ -385,6 +381,21 @@ def do_import(jurisdiction_id: str, datadir: str) -> None:
     )
 
 
-# run process_import_function if main
+# run process_import_function or do_import
 if __name__ == "__main__":
-    process_import_function({}, {})
+    # pass arguments to run do_import() process,
+    # for reproducing import errors locally
+    # poetry run python app.py do_import {os_jurisdiction_id} {path_to_folder}
+    # e.g. poetry run python app.py do_import
+    #      "ocd-jurisdiction/country:us/state:ma/government"
+    #      "/path/to/ma-2024-11-15T12_00_59.748666"
+    if sys.argv[1] == "do_import":
+        # we need to set up django here, because we're running locally
+        # and don't have zappa packaging
+        import django
+
+        django.setup()
+        do_import(sys.argv[2], sys.argv[3])
+    else:
+        # just run the entrypoint function, if no args present
+        process_import_function({}, {})
